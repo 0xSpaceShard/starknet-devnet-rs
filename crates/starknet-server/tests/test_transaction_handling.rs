@@ -6,7 +6,7 @@ mod trace_tests {
     use starknet_core::utils::exported_test_utils::dummy_cairo_0_contract_class;
     use starknet_rs_accounts::{Account, AccountError, ExecutionEncoding, SingleOwnerAccount};
     use starknet_rs_core::types::contract::legacy::LegacyContractClass;
-    use starknet_rs_core::types::{FieldElement, StarknetError};
+    use starknet_rs_core::types::FieldElement;
     use starknet_rs_providers::ProviderError;
 
     use crate::common::background_devnet::BackgroundDevnet;
@@ -40,14 +40,8 @@ mod trace_tests {
             .await;
 
         match declaration_result {
-            Err(AccountError::Provider(ProviderError::StarknetError(
-                StarknetError::ValidationFailure(message),
-            ))) => {
-                assert_eq!(
-                    message,
-                    "Execution failed. Failure reason: \
-                     0x4641494c45442056414c4944415445204445434c415245 ('FAILED VALIDATE DECLARE')."
-                );
+            Err(AccountError::Provider(ProviderError::StarknetError(error))) => {
+                assert_eq!(error.message, "Account validation failed");
             }
             other => panic!("Unexpected result: {other:?}"),
         }
