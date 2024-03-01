@@ -6,7 +6,8 @@ use starknet_types::contract_address::ContractAddress;
 use starknet_types::felt::{ClassHash, Felt};
 use starknet_types::patricia_key::{PatriciaKey, StorageKey};
 use starknet_types::rpc::state::{
-    ClassHashes, ContractNonce, DeployedContract, StorageDiff, StorageEntry, ThinStateDiff,
+    ClassHashes, ContractNonce, DeployedContract, ReplacedClasses, StorageDiff, StorageEntry,
+    ThinStateDiff,
 };
 
 use super::CommittedClassStorage;
@@ -25,6 +26,7 @@ pub struct StateDiff {
     pub(crate) declared_contracts: Vec<ClassHash>,
     // cairo 0 declared contracts
     pub(crate) cairo_0_declared_contracts: Vec<ClassHash>,
+    pub(crate) replaced_classes: Vec<ReplacedClasses>,
 }
 
 impl Eq for StateDiff {}
@@ -61,13 +63,18 @@ impl StateDiff {
             })
             .collect();
 
+        let replaced_classes = vec![];
+        // TODO To completely populate replaced_classes, one would need to check all entries in
+        // diff.address_to_class_hash, compare with the previous state, and filter out those
+        // addresses that were present, but with a different class hash. Potential solution:
+        // commit_with_diff can be moved from StarknetState to Starknet (problem in
+        // StarknetState tests which rely on commit_with_diff directly on StarknetState)
         let address_to_class_hash = diff
             .address_to_class_hash
             .iter()
             .map(|(address, class_hash)| {
                 let contract_address = ContractAddress::from(*address);
                 let class_hash = class_hash.0.into();
-
                 (contract_address, class_hash)
             })
             .collect::<HashMap<ContractAddress, ClassHash>>();
@@ -109,6 +116,7 @@ impl StateDiff {
             class_hash_to_compiled_class_hash,
             cairo_0_declared_contracts,
             declared_contracts,
+            replaced_classes,
         })
     }
 }
@@ -162,7 +170,7 @@ impl From<StateDiff> for ThinStateDiff {
                         .collect(),
                 })
                 .collect(),
-            replaced_classes: vec![],
+            replaced_classes: value.replaced_classes,
         }
     }
 }
