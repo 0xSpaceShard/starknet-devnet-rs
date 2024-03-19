@@ -82,11 +82,12 @@ mod tests {
     use starknet_api::hash::StarkFelt;
     use starknet_api::transaction::{Fee, Tip};
     use starknet_rs_core::types::{TransactionExecutionStatus, TransactionFinalityStatus};
-    use starknet_rs_core::utils::get_selector_from_name;
+    use starknet_rs_core::utils::{get_selector_from_name, get_storage_var_address};
     use starknet_types::contract_address::ContractAddress;
     use starknet_types::contract_class::{Cairo0ContractClass, ContractClass};
     use starknet_types::contract_storage_key::ContractStorageKey;
     use starknet_types::felt::Felt;
+    use starknet_types::patricia_key::PatriciaKey;
     use starknet_types::rpc::transactions::broadcasted_invoke_transaction_v1::BroadcastedInvokeTransactionV1;
     use starknet_types::rpc::transactions::broadcasted_invoke_transaction_v3::BroadcastedInvokeTransactionV3;
     use starknet_types::rpc::transactions::{
@@ -100,7 +101,6 @@ mod tests {
     use crate::state::CustomState;
     use crate::traits::{Accounted, Deployed, HashIdentifiedMut};
     use crate::utils::exported_test_utils::dummy_cairo_0_contract_class;
-    use crate::utils::get_storage_var_address;
     use crate::utils::test_utils::{
         cairo_0_account_without_validations, dummy_contract_address, dummy_felt, get_bytes_from_u32,
     };
@@ -445,7 +445,8 @@ mod tests {
         let dummy_contract_address =
             ContractAddress::new(Felt::new(address_bytes).unwrap()).unwrap();
         let dummy_contract_class_hash = dummy_contract.generate_hash().unwrap();
-        let storage_key = get_storage_var_address("balance", &[]).unwrap();
+        let storage_key =
+            PatriciaKey::try_from(get_storage_var_address("balance", &[]).unwrap()).unwrap();
         let contract_storage_key = ContractStorageKey::new(dummy_contract_address, storage_key);
 
         // declare dummy contract
