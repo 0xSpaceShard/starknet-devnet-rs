@@ -1,0 +1,3 @@
+aws ec2 describe-launch-template-versions --launch-template-id lt-0913f29d10af1688b
+
+aws ec2 run-instances --launch-template LaunchTemplateId=lt-0913f29d10af1688b,Version=1
