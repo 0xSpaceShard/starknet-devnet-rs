@@ -63,12 +63,13 @@ rand_mt = "4.2.2"
 regex_generate = "0.2.3"
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 url = "2.4"
-usc = { version = "2.2.0-rc.0", package = "universal-sierra-compiler" }
+# TODO change to official release from crates.io
+usc = { git = "https://github.com/software-mansion/universal-sierra-compiler", branch = "release/2.2.0-rc.1", package = "universal-sierra-compiler" }
 num-bigint = { version = "0.4" }
 bigdecimal = { version = "0.4.5" }
 
 # Starknet dependencies
-starknet_api = { version = "0.10.0", features = ["testing"] }
+starknet_api = { version = "0.13.0-rc.0", features = ["testing"] }
 blockifier = { version = "0.8.0-rc.0" }
 starknet-rs-signers = { version = "0.8.0", package = "starknet-signers" }
 starknet-rs-ff = { version = "0.3.7", package = "starknet-ff" }
