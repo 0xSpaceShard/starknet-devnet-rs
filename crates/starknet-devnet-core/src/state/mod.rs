@@ -160,14 +160,10 @@ pub struct StarknetState {
     historic_state: Option<DictState>,
 }
 
-fn default_global_contract_cache() -> GlobalContractCache {
-    GlobalContractCache::new(GLOBAL_CONTRACT_CACHE_SIZE_FOR_TEST)
-}
-
 impl Default for StarknetState {
     fn default() -> Self {
         Self {
-            state: CachedState::new(Default::default(), default_global_contract_cache()),
+            state: CachedState::new(Default::default()),
             rpc_contract_classes: Default::default(),
             historic_state: Default::default(),
         }
@@ -180,7 +176,7 @@ impl StarknetState {
         rpc_contract_classes: Arc<RwLock<CommittedClassStorage>>,
     ) -> Self {
         Self {
-            state: CachedState::new(DictState::new(defaulter), default_global_contract_cache()),
+            state: CachedState::new(DictState::new(defaulter)),
             rpc_contract_classes,
             historic_state: Default::default(),
         }
@@ -196,7 +192,7 @@ impl StarknetState {
 
         let diff = StateDiff::generate(&mut self.state, new_classes)?;
         let new_historic = self.expand_historic(diff.clone())?;
-        self.state = CachedState::new(new_historic.clone(), default_global_contract_cache());
+        self.state = CachedState::new(new_historic.clone());
 
         Ok(diff)
     }
@@ -246,7 +242,7 @@ impl StarknetState {
     pub fn clone_historic(&self) -> Self {
         let historic_state = self.historic_state.as_ref().unwrap().clone();
         Self {
-            state: CachedState::new(historic_state, default_global_contract_cache()),
+            state: CachedState::new(historic_state),
             rpc_contract_classes: self.rpc_contract_classes.clone(),
             historic_state: Some(self.historic_state.as_ref().unwrap().clone()),
         }
@@ -292,10 +288,6 @@ impl State for StarknetState {
         compiled_class_hash: starknet_api::core::CompiledClassHash,
     ) -> blockifier::state::state_api::StateResult<()> {
         self.state.set_compiled_class_hash(class_hash, compiled_class_hash)
-    }
-
-    fn to_state_diff(&mut self) -> blockifier::state::cached_state::CommitmentStateDiff {
-        self.state.to_state_diff()
     }
 
     fn add_visited_pcs(

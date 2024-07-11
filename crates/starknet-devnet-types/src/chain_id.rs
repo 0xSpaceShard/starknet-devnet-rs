@@ -51,7 +51,10 @@ impl From<&ChainId> for FieldElement {
 
 impl From<ChainId> for starknet_api::core::ChainId {
     fn from(value: ChainId) -> Self {
-        starknet_api::core::ChainId(value.to_string())
+        match value {
+            ChainId::Mainnet => starknet_api::core::ChainId::Mainnet,
+            ChainId::Testnet => starknet_api::core::ChainId::Sepolia,
+        }
     }
 }
 

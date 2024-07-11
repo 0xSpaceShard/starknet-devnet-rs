@@ -1121,7 +1121,6 @@ impl Starknet {
             Arc::new(RwLock::new(state.clone_rpc_contract_classes()));
         let mut transactional_state = CachedState::new(
             CachedState::create_transactional(&mut state.state),
-            GlobalContractCache::new(GLOBAL_CONTRACT_CACHE_SIZE_FOR_TEST),
         );
 
         for (blockifier_transaction, transaction_type, skip_validate_due_to_impersonation) in
