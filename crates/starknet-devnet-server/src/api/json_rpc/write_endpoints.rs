@@ -12,7 +12,7 @@ use super::models::{
 };
 use super::{DevnetResponse, StarknetResponse};
 use crate::api::http::endpoints::blocks::{abort_blocks_impl, create_block_impl};
-use crate::api::http::endpoints::dump_load::{dump_impl, load_impl};
+use crate::api::http::endpoints::dump_load::dump_impl;
 use crate::api::http::endpoints::mint_token::mint_impl;
 use crate::api::http::endpoints::postman::{
     postman_consume_message_from_l2_impl, postman_flush_impl, postman_load_impl,
@@ -20,11 +20,13 @@ use crate::api::http::endpoints::postman::{
 };
 use crate::api::http::endpoints::restart_impl;
 use crate::api::http::endpoints::time::{increase_time_impl, set_time_impl};
+use crate::api::http::error::HttpApiError;
 use crate::api::http::models::{
-    AbortingBlocks, DumpPath, FlushParameters, IncreaseTime, LoadPath, MintTokensRequest,
+    AbortingBlocks, DumpPath, FlushParameters, IncreaseTime, MintTokensRequest,
     PostmanLoadL1MessagingContract, SetTime,
 };
 use crate::api::json_rpc::JsonRpcHandler;
+use crate::dump::load_events;
 
 impl JsonRpcHandler {
     pub async fn add_declare_transaction(
@@ -106,9 +108,17 @@ impl JsonRpcHandler {
     }
 
     /// devnet_load
-    pub async fn load(&self, path: LoadPath) -> StrictRpcResult {
-        load_impl(&self.api, path).await.map_err(ApiError::from)?;
-        Ok(super::JsonRpcResponse::Empty)
+    pub async fn load(&self, path: String) -> StrictRpcResult {
+        match load_events(self.starknet_config.dump_on, &path) {
+            Ok(events) => {
+                self.restart().await?; // necessary to restart before loading
+                match self.re_execute(&events).await {
+                    Ok(_) => Ok(super::JsonRpcResponse::Empty),
+                    Err(e) => Err(ApiError::HttpApiError(HttpApiError::LoadError(e.to_string()))),
+                }
+            }
+            Err(e) => Err(ApiError::HttpApiError(HttpApiError::LoadError(e.to_string()))),
+        }
     }
 
     /// devnet_postmanLoad
@@ -122,7 +132,7 @@ impl JsonRpcHandler {
     /// devnet_postmanFlush
     pub async fn postman_flush(&self, data: Option<FlushParameters>) -> StrictRpcResult {
         Ok(DevnetResponse::FlushedMessages(
-            postman_flush_impl(&self.api, data).await.map_err(ApiError::from)?,
+            postman_flush_impl(&self.api, data, self).await.map_err(ApiError::from)?,
         )
         .into())
     }

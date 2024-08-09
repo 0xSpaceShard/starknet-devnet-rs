@@ -14,6 +14,7 @@ use models::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use starknet_core::starknet::starknet_config::{DumpOn, StarknetConfig};
 use starknet_rs_core::types::{ContractClass as CodegenContractClass, Felt};
 use starknet_types::messaging::{MessageToL1, MessageToL2};
 use starknet_types::rpc::block::{Block, PendingBlock};
@@ -51,6 +52,7 @@ use crate::api::json_rpc::models::{
     BroadcastedInvokeTransactionEnumWrapper, SimulateTransactionsInput,
 };
 use crate::api::serde_helpers::{empty_params, optional_params};
+use crate::dump::dump_event;
 use crate::rpc_core::error::RpcError;
 use crate::rpc_core::request::RpcMethodCall;
 use crate::rpc_core::response::ResponseResult;
@@ -94,6 +96,7 @@ impl ToRpcResponseResult for StrictRpcResult {
 pub struct JsonRpcHandler {
     pub api: Api,
     pub origin_caller: Option<OriginForwarder>,
+    pub starknet_config: StarknetConfig,
     pub server_config: ServerConfig,
 }
 
@@ -228,7 +231,8 @@ impl JsonRpcHandler {
             JsonRpcRequest::AutoImpersonate => self.set_auto_impersonate(true).await,
             JsonRpcRequest::StopAutoImpersonate => self.set_auto_impersonate(false).await,
             JsonRpcRequest::Dump(path) => self.dump(path).await,
-            JsonRpcRequest::Load(path) => self.load(path).await,
+            // devnet_load
+            JsonRpcRequest::Load(LoadPath { path }) => self.load(path).await,
             JsonRpcRequest::PostmanLoadL1MessagingContract(data) => self.postman_load(data).await,
             JsonRpcRequest::PostmanFlush(data) => self.postman_flush(data).await,
             JsonRpcRequest::PostmanSendMessageToL2(message) => {
@@ -249,6 +253,7 @@ impl JsonRpcHandler {
             JsonRpcRequest::DevnetConfig => self.get_devnet_config().await,
         };
 
+        // If locally we got an error and forking is set up, forward the request to the origin
         if let (Err(err), Some(forwarder)) = (&starknet_resp, &self.origin_caller) {
             match err {
                 // if a block or state is requested that was only added to origin after
@@ -271,7 +276,73 @@ impl JsonRpcHandler {
             }
         }
 
+        // TODO is there a case when is_err but we need to dump?
+        if starknet_resp.is_ok() {
+            if let Err(e) = self.update_dump(&original_call).await {
+                return ResponseResult::Error(e);
+            }
+        }
+
         starknet_resp.to_rpc_result()
+    }
+
+    const DUMPABLE_METHODS: &'static [&'static str] = &[
+        "devnet_impersonateAccount",
+        "devnet_stopImpersonateAccount",
+        "devnet_autoImpersonate",
+        "devnet_stopAutoImpersonate",
+        // "devnet_postmanLoad", TODO
+        // "devnet_postmanFlush",
+        "devnet_postmanSendMessageToL2",
+        "devnet_postmanConsumeMessageFromL2",
+        "devnet_createBlock",
+        "devnet_abortBlocks",
+        "devnet_setGasPrice",
+        "devnet_setTime",
+        "devnet_increaseTime",
+        "devnet_mint",
+        "starknet_addInvokeTransaction",
+        "starknet_addDeclareTransaction",
+        "starknet_addDeployAccountTransaction",
+    ];
+
+    async fn update_dump(&self, event: &RpcMethodCall) -> Result<(), RpcError> {
+        // TODO don't lock mutex on every call - specify dumping options on construction
+        let starknet = self.api.starknet.lock().await;
+        if let Some(dump_on) = starknet.config.dump_on {
+            if !Self::DUMPABLE_METHODS.contains(&event.method.as_str()) {
+                return Ok(());
+            }
+
+            match dump_on {
+                DumpOn::Block => {
+                    let dump_path = starknet
+                        .config
+                        .dump_path
+                        .as_deref()
+                        .ok_or(RpcError::internal_error_with("Undefined dump_path"))?;
+
+                    dump_event(event, dump_path).map_err(|e| {
+                        let msg = format!("Failed dumping of {}: {e}", event.method);
+                        RpcError::internal_error_with(msg)
+                    })?;
+                }
+                DumpOn::Request | DumpOn::Exit => {
+                    self.api.dumpable_events.lock().await.push(event.clone())
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    pub(crate) async fn re_execute(&self, events: &[RpcMethodCall]) -> Result<(), RpcError> {
+        for event in events {
+            if let ResponseResult::Error(e) = self.on_call(event.clone()).await.result {
+                return Err(e);
+            }
+        }
+        Ok(())
     }
 }
 
