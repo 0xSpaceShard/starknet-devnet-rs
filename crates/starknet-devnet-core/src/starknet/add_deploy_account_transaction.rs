@@ -265,7 +265,7 @@ mod tests {
             .unwrap_err()
         {
             Error::TransactionValidationError(
-                crate::error::TransactionValidationError::InsufficientMaxFee,
+                crate::error::TransactionValidationError::InsufficientResourcesForValidate,
             ) => {}
             err => {
                 panic!("Wrong error type: {:?}", err);

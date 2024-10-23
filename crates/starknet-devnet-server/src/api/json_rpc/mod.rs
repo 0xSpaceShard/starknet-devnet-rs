@@ -8,10 +8,13 @@ mod write_endpoints;
 
 pub const RPC_SPEC_VERSION: &str = "0.7.1";
 
+use axum::extract::ws::{Message, WebSocket};
 use enum_helper_macros::{AllVariantsSerdeRenames, VariantName};
+use futures::StreamExt;
 use models::{
     BlockAndClassHashInput, BlockAndContractAddressInput, BlockAndIndexInput, CallInput,
-    EstimateFeeInput, EventsInput, GetStorageInput, TransactionHashInput, TransactionHashOutput,
+    EstimateFeeInput, EventsInput, GetStorageInput, L1TransactionHashInput, TransactionHashInput,
+    TransactionHashOutput,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -26,7 +29,8 @@ use starknet_types::rpc::gas_modification::{GasModification, GasModificationRequ
 use starknet_types::rpc::state::{PendingStateUpdate, StateUpdate};
 use starknet_types::rpc::transaction_receipt::TransactionReceipt;
 use starknet_types::rpc::transactions::{
-    BlockTransactionTrace, EventsChunk, SimulatedTransaction, TransactionTrace, TransactionWithHash,
+    BlockTransactionTrace, EventsChunk, L1HandlerTransactionStatus, SimulatedTransaction,
+    TransactionStatus, TransactionTrace, TransactionWithHash,
 };
 use starknet_types::starknet_api::block::BlockNumber;
 use tracing::{error, info, trace};
@@ -36,7 +40,7 @@ use self::models::{
     AccountAddressInput, BlockHashAndNumberOutput, BlockIdInput,
     BroadcastedDeclareTransactionInput, BroadcastedDeployAccountTransactionInput,
     BroadcastedInvokeTransactionInput, DeclareTransactionOutput, DeployAccountTransactionOutput,
-    SyncingOutput, TransactionStatusOutput,
+    SyncingOutput,
 };
 use self::origin_forwarder::OriginForwarder;
 use super::http::endpoints::accounts::{BalanceQuery, PredeployedAccountsQuery};
@@ -153,6 +157,28 @@ impl RpcHandler for JsonRpcHandler {
                 }
             }
         }
+    }
+
+    async fn on_websocket(&self, mut socket: WebSocket) {
+        while let Some(msg) = socket.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    self.on_websocket_rpc_call(text.as_bytes(), &mut socket).await;
+                }
+                Ok(Message::Binary(bytes)) => {
+                    self.on_websocket_rpc_call(&bytes, &mut socket).await;
+                }
+                Ok(Message::Close(_)) => {
+                    tracing::info!("Websocket disconnected");
+                    return;
+                }
+                other => {
+                    tracing::error!("Socket handler got an unexpected message: {other:?}")
+                }
+            }
+        }
+
+        tracing::error!("Failed socket read");
     }
 }
 
@@ -313,6 +339,7 @@ impl JsonRpcHandler {
             JsonRpcRequest::AccountBalance(data) => self.get_account_balance(data).await,
             JsonRpcRequest::Mint(data) => self.mint(data).await,
             JsonRpcRequest::DevnetConfig => self.get_devnet_config().await,
+            JsonRpcRequest::MessagesStatusByL1Hash(data) => self.get_messages_status(data).await,
         };
 
         // If locally we got an error and forking is set up, forward the request to the origin
@@ -345,6 +372,29 @@ impl JsonRpcHandler {
         }
 
         starknet_resp.to_rpc_result()
+    }
+
+    /// Takes `bytes` to be an encoded RPC call, executes it, and sends the response back via `ws`.
+    async fn on_websocket_rpc_call(&self, bytes: &[u8], ws: &mut WebSocket) {
+        match serde_json::from_slice(bytes) {
+            Ok(call) => {
+                let resp = self.on_call(call).await;
+                let resp_serialized = serde_json::to_string(&resp).unwrap_or_else(|e| {
+                    let err_msg = format!("Error converting RPC response to string: {e}");
+                    tracing::error!(err_msg);
+                    err_msg
+                });
+
+                if let Err(e) = ws.send(Message::Text(resp_serialized)).await {
+                    tracing::error!("Error sending websocket message: {e}");
+                }
+            }
+            Err(e) => {
+                if let Err(e) = ws.send(Message::Text(e.to_string())).await {
+                    tracing::error!("Error sending websocket message: {e}");
+                }
+            }
+        }
     }
 
     const DUMPABLE_METHODS: &'static [&'static str] = &[
@@ -429,6 +479,8 @@ pub enum JsonRpcRequest {
     TransactionReceiptByTransactionHash(TransactionHashInput),
     #[serde(rename = "starknet_getTransactionStatus")]
     TransactionStatusByHash(TransactionHashInput),
+    #[serde(rename = "starknet_getMessagesStatus")]
+    MessagesStatusByL1Hash(L1TransactionHashInput),
     #[serde(rename = "starknet_getClass")]
     ClassByHash(BlockAndClassHashInput),
     #[serde(rename = "starknet_getClassHashAt")]
@@ -545,7 +597,7 @@ pub enum StarknetResponse {
     Felt(Felt),
     Transaction(TransactionWithHash),
     TransactionReceiptByTransactionHash(Box<TransactionReceipt>),
-    TransactionStatusByHash(TransactionStatusOutput),
+    TransactionStatusByHash(TransactionStatus),
     ContractClass(CodegenContractClass),
     BlockTransactionCount(u64),
     Call(Vec<Felt>),
@@ -562,6 +614,7 @@ pub enum StarknetResponse {
     SimulateTransactions(Vec<SimulatedTransaction>),
     TraceTransaction(TransactionTrace),
     BlockTransactionTraces(Vec<BlockTransactionTrace>),
+    MessagesStatusByL1Hash(Vec<L1HandlerTransactionStatus>),
 }
 
 #[derive(Serialize)]
