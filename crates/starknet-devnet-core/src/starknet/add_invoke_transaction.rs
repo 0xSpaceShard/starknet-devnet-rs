@@ -15,7 +15,7 @@ pub fn add_invoke_transaction(
     broadcasted_invoke_transaction: BroadcastedInvokeTransaction,
 ) -> DevnetResult<TransactionHash> {
     if broadcasted_invoke_transaction.is_max_fee_zero_value() {
-        return Err(TransactionValidationError::InsufficientResourcesForValidate.into());
+        return Err(TransactionValidationError::InsufficientMaxFee.into());
     }
 
     if broadcasted_invoke_transaction.is_only_query() {
@@ -207,9 +207,7 @@ mod tests {
             .expect_err("Expected MaxFeeZeroError");
 
         match invoke_v3_txn_error {
-            Error::TransactionValidationError(
-                TransactionValidationError::InsufficientResourcesForValidate,
-            ) => {}
+            Error::TransactionValidationError(TransactionValidationError::InsufficientMaxFee) => {}
             _ => panic!("Wrong error type"),
         }
     }
@@ -279,7 +277,7 @@ mod tests {
             assert!(transaction.is_err());
             match transaction.err().unwrap() {
                 Error::TransactionValidationError(
-                    TransactionValidationError::InsufficientResourcesForValidate,
+                    TransactionValidationError::InsufficientMaxFee,
                 ) => {}
                 _ => {
                     panic!("Wrong error type")
@@ -381,9 +379,7 @@ mod tests {
 
         assert!(result.is_err());
         match result.err().unwrap() {
-            Error::TransactionValidationError(
-                TransactionValidationError::InsufficientResourcesForValidate,
-            ) => {}
+            Error::TransactionValidationError(TransactionValidationError::InsufficientMaxFee) => {}
             _ => panic!("Wrong error type"),
         }
     }

@@ -21,7 +21,7 @@ pub enum Error {
     #[error("{0:?}")]
     ContractExecutionError(ErrorStack),
     #[error("Execution error in simulating transaction no. {failure_index}: {error_stack:?}")]
-    ContractExecutionErrorInSimulation { failure_index: usize, error_stack: ErrorStack },
+    ContractExecutionErrorInSimulation { failure_index: u64, error_stack: ErrorStack },
     #[error("Types error: {0}")]
     TypesError(#[from] starknet_types::error::Error),
     #[error("I/O error: {0}")]
@@ -78,6 +78,12 @@ impl From<starknet_types_core::felt::FromStrError> for Error {
     }
 }
 
+impl From<blockifier::transaction::errors::TransactionExecutionError> for Error {
+    fn from(e: blockifier::transaction::errors::TransactionExecutionError) -> Self {
+        Self::ContractExecutionError(gen_tx_execution_error_trace(&e))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum StateError {
     #[error("No class hash {0:x} found")]
@@ -118,7 +124,7 @@ impl From<TransactionExecutionError> for Error {
             TransactionExecutionError::ValidateTransactionError { .. } => {
                 TransactionValidationError::ValidationFailure { reason: value.to_string() }.into()
             }
-            other => Self::ContractExecutionError(gen_tx_execution_error_trace(&other)),
+            other => Self::BlockifierTransactionError(other),
         }
     }
 }
@@ -127,7 +133,7 @@ impl From<FeeCheckError> for Error {
     fn from(value: FeeCheckError) -> Self {
         match value {
             FeeCheckError::MaxL1GasAmountExceeded { .. } | FeeCheckError::MaxFeeExceeded { .. } => {
-                TransactionValidationError::InsufficientResourcesForValidate.into()
+                TransactionValidationError::InsufficientMaxFee.into()
             }
             FeeCheckError::InsufficientFeeTokenBalance { .. } => {
                 TransactionValidationError::InsufficientAccountBalance.into()
@@ -143,7 +149,7 @@ impl From<TransactionFeeError> for Error {
             | TransactionFeeError::MaxFeeTooLow { .. }
             | TransactionFeeError::MaxL1GasPriceTooLow { .. }
             | TransactionFeeError::MaxL1GasAmountTooLow { .. } => {
-                TransactionValidationError::InsufficientResourcesForValidate.into()
+                TransactionValidationError::InsufficientMaxFee.into()
             }
             TransactionFeeError::MaxFeeExceedsBalance { .. }
             | TransactionFeeError::L1GasBoundsExceedBalance { .. } => {

@@ -16,7 +16,7 @@ pub fn add_deploy_account_transaction(
     broadcasted_deploy_account_transaction: BroadcastedDeployAccountTransaction,
 ) -> DevnetResult<(TransactionHash, ContractAddress)> {
     if broadcasted_deploy_account_transaction.is_max_fee_zero_value() {
-        return Err(TransactionValidationError::InsufficientResourcesForValidate.into());
+        return Err(TransactionValidationError::InsufficientMaxFee.into());
     }
 
     if broadcasted_deploy_account_transaction.is_only_query() {
@@ -155,9 +155,7 @@ mod tests {
 
         assert!(result.is_err());
         match result.err().unwrap() {
-            Error::TransactionValidationError(
-                TransactionValidationError::InsufficientResourcesForValidate,
-            ) => {}
+            Error::TransactionValidationError(TransactionValidationError::InsufficientMaxFee) => {}
             _ => panic!("Wrong error type"),
         }
     }
@@ -174,9 +172,7 @@ mod tests {
             ))
             .unwrap_err();
         match txn_err {
-            Error::TransactionValidationError(
-                TransactionValidationError::InsufficientResourcesForValidate,
-            ) => {}
+            Error::TransactionValidationError(TransactionValidationError::InsufficientMaxFee) => {}
             _ => panic!("Wrong error type"),
         }
     }

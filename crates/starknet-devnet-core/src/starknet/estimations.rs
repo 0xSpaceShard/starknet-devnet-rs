@@ -56,11 +56,13 @@ pub fn estimate_fee(
             blockifier::transaction::transaction_execution::Transaction::AccountTransaction(tx),
             charge_fee,
             validate,
-            return_error_on_reverted_execution,
         )
         .map_err(|e| match e {
             Error::ContractExecutionError(error_stack) => {
-                Error::ContractExecutionErrorInSimulation { failure_index: tx_i, error_stack }
+                Error::ContractExecutionErrorInSimulation {
+                    failure_index: tx_i as u64,
+                    error_stack,
+                }
             }
             other => other,
         })?;
