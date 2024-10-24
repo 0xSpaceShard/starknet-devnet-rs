@@ -8,15 +8,14 @@ use ethers::types::U256;
 use server::test_utils::assert_contains;
 use starknet_core::constants::CAIRO_1_ACCOUNT_CONTRACT_SIERRA_HASH;
 use starknet_core::random_number_generator::generate_u32_random_number;
-use starknet_core::utils::calculate_casm_hash;
 use starknet_rs_accounts::{
     Account, AccountFactory, ArgentAccountFactory, OpenZeppelinAccountFactory, SingleOwnerAccount,
 };
 use starknet_rs_contract::ContractFactory;
 use starknet_rs_core::types::contract::SierraClass;
 use starknet_rs_core::types::{
-    BlockId, BlockTag, ContractClass, DeployAccountTransactionResult, ExecutionResult, Felt,
-    FlattenedSierraClass, FunctionCall,
+    BlockId, BlockTag, ContractClass, DeployAccountTransactionResult, ExecutionResult, FeeEstimate,
+    Felt, FlattenedSierraClass, FunctionCall, NonZeroFelt,
 };
 use starknet_rs_core::utils::{get_selector_from_name, get_udc_deployed_address};
 use starknet_rs_providers::jsonrpc::{
@@ -24,6 +23,7 @@ use starknet_rs_providers::jsonrpc::{
 };
 use starknet_rs_providers::{JsonRpcClient, Provider, ProviderError};
 use starknet_rs_signers::LocalWallet;
+use starknet_types::compile_sierra_contract_json;
 use starknet_types::felt::felt_from_prefixed_hex;
 
 use super::background_devnet::BackgroundDevnet;
@@ -62,8 +62,11 @@ pub type SierraWithCasmHash = (FlattenedSierraClass, Felt);
 pub fn get_flattened_sierra_contract_and_casm_hash(sierra_path: &str) -> SierraWithCasmHash {
     let sierra_string = std::fs::read_to_string(sierra_path).unwrap();
     let sierra_class: SierraClass = serde_json::from_str(&sierra_string).unwrap();
-    let casm_json = usc::compile_contract(serde_json::from_str(&sierra_string).unwrap()).unwrap();
-    (sierra_class.flatten().unwrap(), calculate_casm_hash(casm_json).unwrap())
+    let casm_hash = compile_sierra_contract_json(serde_json::from_str(&sierra_string).unwrap())
+        .unwrap()
+        .compiled_class_hash();
+
+    (sierra_class.flatten().unwrap(), casm_hash)
 }
 
 pub fn get_messaging_contract_in_sierra_and_compiled_class_hash() -> SierraWithCasmHash {
@@ -242,7 +245,7 @@ impl Drop for UniqueAutoDeletableFile {
 /// Deploys an instance of the class whose sierra hash is provided as `class_hash`. Uses a v1 invoke
 /// transaction. Returns the address of the newly deployed contract.
 pub async fn deploy_v1(
-    account: Arc<SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>>,
+    account: &SingleOwnerAccount<&JsonRpcClient<HttpTransport>, LocalWallet>,
     class_hash: Felt,
     ctor_args: &[Felt],
 ) -> Result<Felt, anyhow::Error> {
@@ -265,20 +268,26 @@ pub async fn deploy_v1(
 }
 
 /// Declares and deploys a Cairo 1 contract; returns class hash and contract address
-pub async fn declare_deploy_v1(
-    account: Arc<SingleOwnerAccount<JsonRpcClient<HttpTransport>, LocalWallet>>,
+pub async fn declare_v3_deploy_v3(
+    account: &SingleOwnerAccount<&JsonRpcClient<HttpTransport>, LocalWallet>,
     contract_class: FlattenedSierraClass,
     casm_hash: Felt,
     ctor_args: &[Felt],
 ) -> Result<(Felt, Felt), anyhow::Error> {
-    // declare the contract
-    let declaration_result = account
-        .declare_v2(Arc::new(contract_class), casm_hash)
-        .max_fee(Felt::from(1e18 as u128))
-        .send()
-        .await?;
+    let salt = Felt::ZERO;
+    let declaration_result = account.declare_v3(Arc::new(contract_class), casm_hash).send().await?;
 
-    let contract_address = deploy_v1(account, declaration_result.class_hash, ctor_args).await?;
+    // deploy the contract
+    let contract_factory = ContractFactory::new(declaration_result.class_hash, account);
+    contract_factory.deploy_v3(ctor_args.to_vec(), salt, false).send().await?;
+
+    // generate the address of the newly deployed contract
+    let contract_address = get_udc_deployed_address(
+        salt,
+        declaration_result.class_hash,
+        &starknet_rs_core::utils::UdcUniqueness::NotUnique,
+        ctor_args,
+    );
 
     Ok((declaration_result.class_hash, contract_address))
 }
@@ -344,6 +353,16 @@ where
 
 pub fn felt_to_u256(f: Felt) -> U256 {
     U256::from_big_endian(&f.to_bytes_be())
+}
+
+pub fn get_gas_units_and_gas_price(fee_estimate: FeeEstimate) -> (u64, u128) {
+    let gas_price =
+        u128::from_le_bytes(fee_estimate.gas_price.to_bytes_le()[0..16].try_into().unwrap());
+    let gas_units = fee_estimate
+        .overall_fee
+        .field_div(&NonZeroFelt::from_felt_unchecked(fee_estimate.gas_price));
+
+    (gas_units.to_le_digits().first().cloned().unwrap(), gas_price)
 }
 
 /// Helper for extracting JSON RPC error from the provider instance of `ProviderError`.

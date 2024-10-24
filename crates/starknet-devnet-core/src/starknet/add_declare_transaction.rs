@@ -1,4 +1,5 @@
 use blockifier::transaction::transactions::ExecutableTransaction;
+use starknet_types::compile_sierra_contract;
 use starknet_types::contract_class::ContractClass;
 use starknet_types::felt::{ClassHash, CompiledClassHash, TransactionHash};
 use starknet_types::rpc::transactions::declare_transaction_v0v1::DeclareTransactionV0V1;
@@ -8,19 +9,16 @@ use starknet_types::rpc::transactions::{
     BroadcastedDeclareTransaction, DeclareTransaction, Transaction, TransactionWithHash,
 };
 
-use crate::error::{DevnetResult, Error};
+use crate::error::{DevnetResult, Error, TransactionValidationError};
 use crate::starknet::Starknet;
 use crate::state::CustomState;
-use crate::utils::calculate_casm_hash;
 
 pub fn add_declare_transaction(
     starknet: &mut Starknet,
     broadcasted_declare_transaction: BroadcastedDeclareTransaction,
 ) -> DevnetResult<(TransactionHash, ClassHash)> {
     if broadcasted_declare_transaction.is_max_fee_zero_value() {
-        return Err(Error::MaxFeeZeroError {
-            tx_type: broadcasted_declare_transaction.to_string(),
-        });
+        return Err(TransactionValidationError::InsufficientResourcesForValidate.into());
     }
 
     if broadcasted_declare_transaction.is_only_query() {
@@ -79,7 +77,7 @@ pub fn add_declare_transaction(
     )?);
 
     let transaction = TransactionWithHash::new(transaction_hash, declare_transaction);
-    let blockifier_execution_result =
+    let blockifier_execution_info =
         blockifier::transaction::account_transaction::AccountTransaction::Declare(
             blockifier_declare_transaction,
         )
@@ -88,16 +86,15 @@ pub fn add_declare_transaction(
             &starknet.block_context,
             true,
             validate,
-        );
+        )?;
 
     // if tx successful, store the class
-    if blockifier_execution_result.as_ref().is_ok_and(|res| !res.is_reverted()) {
+    if !blockifier_execution_info.is_reverted() {
         let state = starknet.get_state();
         state.declare_contract_class(class_hash, casm_hash, contract_class)?;
     }
 
-    // do the steps required in all transactions
-    starknet.handle_transaction_result(transaction, blockifier_execution_result)?;
+    starknet.handle_accepted_transaction(transaction, blockifier_execution_info)?;
 
     Ok((transaction_hash, class_hash))
 }
@@ -111,16 +108,9 @@ fn assert_casm_hash_is_valid(
     match (contract_class, received_casm_hash) {
         (ContractClass::Cairo0(_), None) => Ok(()), // if cairo0, casm_hash expected to be None
         (ContractClass::Cairo1(cairo_lang_contract_class), Some(received_casm_hash)) => {
-            let casm_json = usc::compile_contract(
-                serde_json::to_value(cairo_lang_contract_class)
-                    .map_err(|err| Error::SerializationError { origin: err.to_string() })?,
-            )
-            .map_err(|err| {
-                let reason = err.to_string();
-                Error::TypesError(starknet_types::error::Error::SierraCompilationError { reason })
-            })?;
+            let casm = compile_sierra_contract(cairo_lang_contract_class)?;
 
-            let calculated_casm_hash = calculate_casm_hash(casm_json)?;
+            let calculated_casm_hash = casm.compiled_class_hash();
             if calculated_casm_hash == received_casm_hash {
                 Ok(())
             } else {
@@ -149,6 +139,7 @@ mod tests {
     use starknet_types::rpc::transactions::BroadcastedDeclareTransaction;
     use starknet_types::traits::HashProducer;
 
+    use crate::error::{Error, TransactionValidationError};
     use crate::starknet::tests::setup_starknet_with_no_signature_check_account;
     use crate::starknet::Starknet;
     use crate::state::{BlockNumberOrPending, CustomStateReader};
@@ -221,13 +212,9 @@ mod tests {
 
         assert!(result.is_err());
         match result.err().unwrap() {
-            err @ crate::error::Error::MaxFeeZeroError { .. } => {
-                assert_eq!(
-                    err.to_string(),
-                    "Declare transaction V3: max_fee cannot be zero (exception is v3 transaction \
-                     where l2 gas must be zero)"
-                )
-            }
+            Error::TransactionValidationError(
+                TransactionValidationError::InsufficientResourcesForValidate,
+            ) => {}
             _ => panic!("Wrong error type"),
         }
     }
@@ -250,13 +237,9 @@ mod tests {
 
         assert!(result.is_err());
         match result.err().unwrap() {
-            err @ crate::error::Error::MaxFeeZeroError { .. } => {
-                assert_eq!(
-                    err.to_string(),
-                    "Declare transaction V2: max_fee cannot be zero (exception is v3 transaction \
-                     where l2 gas must be zero)"
-                )
-            }
+            Error::TransactionValidationError(
+                TransactionValidationError::InsufficientResourcesForValidate,
+            ) => {}
             _ => panic!("Wrong error type"),
         }
     }
@@ -397,13 +380,9 @@ mod tests {
 
         assert!(result.is_err());
         match result.err().unwrap() {
-            err @ crate::error::Error::MaxFeeZeroError { .. } => {
-                assert_eq!(
-                    err.to_string(),
-                    "Declare transaction V1: max_fee cannot be zero (exception is v3 transaction \
-                     where l2 gas must be zero)"
-                )
-            }
+            Error::TransactionValidationError(
+                TransactionValidationError::InsufficientResourcesForValidate,
+            ) => {}
             _ => panic!("Wrong error type"),
         }
     }

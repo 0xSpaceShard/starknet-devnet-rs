@@ -217,6 +217,22 @@ impl JsonRpcHandler {
         }
     }
 
+    pub async fn get_compiled_casm(
+        &self,
+        block_id: BlockId,
+        class_hash: ClassHash,
+    ) -> StrictRpcResult {
+        match self.api.starknet.lock().await.get_compiled_casm(block_id.as_ref(), class_hash) {
+            Ok(compiled_casm) => Ok(StarknetResponse::CompiledCasm(compiled_casm).into()),
+            Err(e) => Err(match e {
+                Error::NoBlock => ApiError::BlockNotFound,
+                Error::StateError(_) => ApiError::ClassHashNotFound,
+                e @ Error::NoStateAtBlock { .. } => ApiError::NoStateAtBlock { msg: e.to_string() },
+                unknown_error => ApiError::StarknetDevnetError(unknown_error),
+            }),
+        }
+    }
+
     /// starknet_getClassAt
     pub async fn get_class_at(
         &self,
@@ -438,7 +454,9 @@ impl JsonRpcHandler {
     ) -> StrictRpcResult {
         // borrowing as write/mutable because trace calculation requires so
         let mut starknet = self.api.starknet.lock().await;
-        match starknet.simulate_transactions(block_id.as_ref(), &transactions, simulation_flags) {
+        let res =
+            starknet.simulate_transactions(block_id.as_ref(), &transactions, simulation_flags);
+        match res {
             Ok(result) => Ok(StarknetResponse::SimulateTransactions(result).into()),
             Err(Error::ContractNotFound) => Err(ApiError::ContractNotFound),
             Err(Error::NoBlock) => Err(ApiError::BlockNotFound),
