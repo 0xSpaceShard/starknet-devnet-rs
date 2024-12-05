@@ -123,6 +123,8 @@ pub struct StarknetConfig {
     pub eth_erc20_contract_class: String,
     #[serde(skip_serializing)]
     pub strk_erc20_contract_class: String,
+    #[serde(skip_serializing)]
+    pub predeclare_argent: bool,
 }
 
 impl StarknetConfig {
@@ -165,6 +167,7 @@ impl Default for StarknetConfig {
             strk_erc20_class_hash: CAIRO_1_ERC20_CONTRACT_CLASS_HASH,
             eth_erc20_contract_class: CAIRO_1_ERC20_CONTRACT.to_string(),
             strk_erc20_contract_class: CAIRO_1_ERC20_CONTRACT.to_string(),
+            predeclare_argent: false,
         }
     }
 }
