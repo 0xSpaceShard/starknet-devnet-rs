@@ -25,7 +25,7 @@ use url::Url;
 
 use super::constants::{
     ACCOUNTS, HEALTHCHECK_PATH, HOST, MAX_PORT, MIN_PORT, PREDEPLOYED_ACCOUNT_INITIAL_BALANCE,
-    RPC_PATH, SEED,
+    RPC_PATH, SEED, WS_PATH,
 };
 use super::errors::TestError;
 use super::reqwest_client::{PostReqwestSender, ReqwestClient};
@@ -158,6 +158,10 @@ impl BackgroundDevnet {
         }
 
         Err(TestError::DevnetNotStartable)
+    }
+
+    pub fn ws_url(&self) -> String {
+        format!("ws://{HOST}:{}{WS_PATH}", self.port)
     }
 
     pub async fn send_custom_rpc(
@@ -365,6 +369,30 @@ impl BackgroundDevnet {
             Ok(MaybePendingBlockWithTxs::PendingBlock(b)) => Ok(b),
             other => Err(anyhow::format_err!("Got unexpected block: {other:?}")),
         }
+    }
+
+    pub async fn abort_blocks(
+        &self,
+        starting_block_id: &BlockId,
+    ) -> Result<Vec<Felt>, anyhow::Error> {
+        let mut aborted_blocks = self
+            .send_custom_rpc(
+                "devnet_abortBlocks",
+                json!({ "starting_block_id" : starting_block_id }),
+            )
+            .await
+            .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+
+        let aborted_blocks = aborted_blocks["aborted"]
+            .take()
+            .as_array()
+            .ok_or(anyhow::Error::msg("Invalid abort response"))?
+            .clone();
+
+        Ok(aborted_blocks
+            .into_iter()
+            .map(|block_hash| serde_json::from_value(block_hash).unwrap())
+            .collect())
     }
 
     pub async fn get_config(&self) -> serde_json::Value {

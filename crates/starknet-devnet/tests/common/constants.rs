@@ -12,6 +12,7 @@ pub const CHAIN_ID_CLI_PARAM: &str = "TESTNET";
 // URL paths
 pub const RPC_PATH: &str = "/rpc";
 pub const HEALTHCHECK_PATH: &str = "/is_alive";
+pub const WS_PATH: &str = "/ws";
 
 // predeployed account info with seed=42
 pub const PREDEPLOYED_ACCOUNT_ADDRESS: &str =
@@ -53,9 +54,13 @@ pub const INVALID_ACCOUNT_SIERRA_PATH: &str =
     "../../contracts/test_artifacts/cairo1/invalid_account/invalid_account.sierra";
 
 /// hash of the sierra artifact at commit d9f5220059c1e61ff87e4a5752522569135e464c of
-/// argentlabs/argent-contracts-starknet:main
-pub const ARGENT_ACCOUNT_CLASS_HASH: &str =
+/// argentlabs/argent-contracts-starknet:main (same as v0.3.1)
+pub const LEGACY_ARGENT_ACCOUNT_CLASS_HASH: &str =
     "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b";
+
+/// v0.4.0
+pub const ARGENT_ACCOUNT_CLASS_HASH: &str =
+    "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
 
 /// Forking
 pub const INTEGRATION_SEPOLIA_HTTP_URL: &str =

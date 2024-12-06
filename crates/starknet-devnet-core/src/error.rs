@@ -8,6 +8,8 @@ use starknet_types::contract_address::ContractAddress;
 use starknet_types::contract_storage_key::ContractStorageKey;
 use thiserror::Error;
 
+use crate::stack_trace::{gen_tx_execution_error_trace, ErrorStack};
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -16,12 +18,10 @@ pub enum Error {
     StateError(#[from] StateError),
     #[error(transparent)]
     BlockifierStateError(#[from] blockifier::state::errors::StateError),
-    #[error(transparent)]
-    BlockifierTransactionError(TransactionExecutionError),
-    #[error(transparent)]
-    BlockifierExecutionError(#[from] blockifier::execution::errors::EntryPointExecutionError),
-    #[error("{execution_error}")]
-    ExecutionError { execution_error: String, index: usize },
+    #[error("{0:?}")]
+    ContractExecutionError(ErrorStack),
+    #[error("Execution error in simulating transaction no. {failure_index}: {error_stack:?}")]
+    ContractExecutionErrorInSimulation { failure_index: usize, error_stack: ErrorStack },
     #[error("Types error: {0}")]
     TypesError(#[from] starknet_types::error::Error),
     #[error("I/O error: {0}")]
@@ -96,8 +96,8 @@ pub enum StateError {
 
 #[derive(Debug, Error)]
 pub enum TransactionValidationError {
-    #[error("Provided max fee is not enough to cover the transaction cost.")]
-    InsufficientMaxFee,
+    #[error("The transaction's resources don't cover validation or the minimal transaction fee.")]
+    InsufficientResourcesForValidate,
     #[error("Account transaction nonce is invalid.")]
     InvalidTransactionNonce,
     #[error("Account balance is not enough to cover the transaction cost.")]
@@ -123,7 +123,7 @@ impl From<TransactionExecutionError> for Error {
             err @ TransactionExecutionError::DeclareTransactionError { .. } => {
                 Error::ClassAlreadyDeclared { msg: err.to_string() }
             }
-            other => Self::BlockifierTransactionError(other),
+            other => Self::ContractExecutionError(gen_tx_execution_error_trace(&other)),
         }
     }
 }
@@ -132,7 +132,7 @@ impl From<FeeCheckError> for Error {
     fn from(value: FeeCheckError) -> Self {
         match value {
             FeeCheckError::MaxL1GasAmountExceeded { .. } | FeeCheckError::MaxFeeExceeded { .. } => {
-                TransactionValidationError::InsufficientMaxFee.into()
+                TransactionValidationError::InsufficientResourcesForValidate.into()
             }
             FeeCheckError::InsufficientFeeTokenBalance { .. } => {
                 TransactionValidationError::InsufficientAccountBalance.into()
@@ -148,7 +148,7 @@ impl From<TransactionFeeError> for Error {
             | TransactionFeeError::MaxFeeTooLow { .. }
             | TransactionFeeError::MaxL1GasPriceTooLow { .. }
             | TransactionFeeError::MaxL1GasAmountTooLow { .. } => {
-                TransactionValidationError::InsufficientMaxFee.into()
+                TransactionValidationError::InsufficientResourcesForValidate.into()
             }
             TransactionFeeError::MaxFeeExceedsBalance { .. }
             | TransactionFeeError::L1GasBoundsExceedBalance { .. } => {

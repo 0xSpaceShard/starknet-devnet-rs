@@ -6,6 +6,7 @@ pub mod error;
 pub mod messaging;
 mod predeployed_accounts;
 pub mod raw_execution;
+pub mod stack_trace;
 pub mod starknet;
 mod state;
 mod system_contract;
@@ -18,3 +19,4 @@ mod utils;
 pub mod utils;
 
 pub use blocks::StarknetBlock;
+pub use cairo_lang_starknet_classes::casm_contract_class::CasmContractClass;

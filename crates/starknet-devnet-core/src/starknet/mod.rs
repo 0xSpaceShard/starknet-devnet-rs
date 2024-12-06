@@ -7,17 +7,18 @@ use blockifier::execution::entry_point::CallEntryPoint;
 use blockifier::state::cached_state::CachedState;
 use blockifier::state::state_api::StateReader;
 use blockifier::transaction::account_transaction::AccountTransaction;
+use blockifier::transaction::errors::TransactionExecutionError;
 use blockifier::transaction::objects::TransactionExecutionInfo;
 use blockifier::transaction::transactions::ExecutableTransaction;
+use cairo_lang_starknet_classes::casm_contract_class::CasmContractClass;
+use ethers::types::H256;
 use parking_lot::RwLock;
 use starknet_api::block::{BlockNumber, BlockStatus, BlockTimestamp, GasPrice, GasPricePerToken};
 use starknet_api::core::SequencerContractAddress;
 use starknet_api::felt;
 use starknet_api::transaction::Fee;
-use starknet_config::BlockGenerationOn;
 use starknet_rs_core::types::{
-    BlockId, BlockTag, Call, ExecutionResult, Felt, MsgFromL1, TransactionExecutionStatus,
-    TransactionFinalityStatus,
+    BlockId, BlockTag, Call, ExecutionResult, Felt, Hash256, MsgFromL1, TransactionFinalityStatus,
 };
 use starknet_rs_core::utils::get_selector_from_name;
 use starknet_rs_signers::Signer;
@@ -46,8 +47,8 @@ use starknet_types::rpc::transactions::l1_handler_transaction::L1HandlerTransact
 use starknet_types::rpc::transactions::{
     BlockTransactionTrace, BroadcastedDeclareTransaction, BroadcastedDeployAccountTransaction,
     BroadcastedInvokeTransaction, BroadcastedTransaction, BroadcastedTransactionCommon,
-    SimulatedTransaction, SimulationFlag, TransactionTrace, TransactionType, TransactionWithHash,
-    TransactionWithReceipt, Transactions,
+    L1HandlerTransactionStatus, SimulatedTransaction, SimulationFlag, TransactionStatus,
+    TransactionTrace, TransactionType, TransactionWithHash, TransactionWithReceipt, Transactions,
 };
 use starknet_types::traits::HashProducer;
 use tracing::{error, info};
@@ -60,16 +61,18 @@ use self::transaction_trace::create_trace;
 use crate::account::Account;
 use crate::blocks::{StarknetBlock, StarknetBlocks};
 use crate::constants::{
-    CHARGEABLE_ACCOUNT_ADDRESS, CHARGEABLE_ACCOUNT_PRIVATE_KEY, DEVNET_DEFAULT_CHAIN_ID,
-    DEVNET_DEFAULT_DATA_GAS_PRICE, DEVNET_DEFAULT_GAS_PRICE, DEVNET_DEFAULT_STARTING_BLOCK_NUMBER,
-    ETH_ERC20_CONTRACT_ADDRESS, ETH_ERC20_NAME, ETH_ERC20_SYMBOL, STRK_ERC20_CONTRACT_ADDRESS,
-    STRK_ERC20_NAME, STRK_ERC20_SYMBOL, USE_KZG_DA,
+    ARGENT_CONTRACT_CLASS_HASH, ARGENT_CONTRACT_SIERRA, ARGENT_MULTISIG_CONTRACT_CLASS_HASH,
+    ARGENT_MULTISIG_CONTRACT_SIERRA, CHARGEABLE_ACCOUNT_ADDRESS, CHARGEABLE_ACCOUNT_PRIVATE_KEY,
+    DEVNET_DEFAULT_CHAIN_ID, DEVNET_DEFAULT_DATA_GAS_PRICE, DEVNET_DEFAULT_GAS_PRICE,
+    DEVNET_DEFAULT_STARTING_BLOCK_NUMBER, ETH_ERC20_CONTRACT_ADDRESS, ETH_ERC20_NAME,
+    ETH_ERC20_SYMBOL, STRK_ERC20_CONTRACT_ADDRESS, STRK_ERC20_NAME, STRK_ERC20_SYMBOL, USE_KZG_DA,
 };
 use crate::contract_class_choice::AccountContractClassChoice;
 use crate::error::{DevnetResult, Error, TransactionValidationError};
 use crate::messaging::MessagingBroker;
 use crate::predeployed_accounts::PredeployedAccounts;
 use crate::raw_execution::RawExecutionV1;
+use crate::stack_trace::{gen_tx_execution_error_trace, ErrorStack};
 use crate::state::state_diff::StateDiff;
 use crate::state::{CommittedClassStorage, CustomState, CustomStateReader, StarknetState};
 use crate::traits::{AccountGenerator, Deployed, HashIdentified, HashIdentifiedMut};
@@ -83,7 +86,7 @@ mod add_l1_handler_transaction;
 mod cheats;
 pub(crate) mod defaulter;
 mod estimations;
-mod events;
+pub mod events;
 mod get_class_impls;
 mod predeployed;
 pub mod starknet_config;
@@ -151,7 +154,7 @@ impl Starknet {
         let rpc_contract_classes = Arc::new(RwLock::new(CommittedClassStorage::default()));
         let mut state = StarknetState::new(defaulter, rpc_contract_classes.clone());
 
-        // predeclare account classes
+        // predeclare account classes eligible for predeployment
         for account_class_choice in
             [AccountContractClassChoice::Cairo0, AccountContractClassChoice::Cairo1]
         {
@@ -160,6 +163,18 @@ impl Starknet {
                 class_wrapper.class_hash,
                 class_wrapper.contract_class,
             )?;
+        }
+
+        // predeclare argent account classes (not predeployable)
+        if config.predeclare_argent {
+            for (class_hash, raw_sierra) in [
+                (ARGENT_CONTRACT_CLASS_HASH, ARGENT_CONTRACT_SIERRA),
+                (ARGENT_MULTISIG_CONTRACT_CLASS_HASH, ARGENT_MULTISIG_CONTRACT_SIERRA),
+            ] {
+                let contract_class =
+                    ContractClass::Cairo1(ContractClass::cairo_1_from_sierra_json_str(raw_sierra)?);
+                state.predeclare_contract_class(class_hash, contract_class)?;
+            }
         }
 
         // deploy udc, eth erc20 and strk erc20 contracts
@@ -406,7 +421,7 @@ impl Starknet {
         self.transactions.insert(transaction_hash, transaction_to_add);
 
         // create new block from pending one, only in block-generation-on-transaction mode
-        if self.config.block_generation_on == BlockGenerationOn::Transaction {
+        if !self.config.uses_pending_block() {
             self.generate_new_block_and_state()?;
         }
 
@@ -598,6 +613,14 @@ impl Starknet {
         get_class_impls::get_class_at_impl(self, block_id, contract_address)
     }
 
+    pub fn get_compiled_casm(
+        &self,
+        block_id: &BlockId,
+        class_hash: ClassHash,
+    ) -> DevnetResult<CasmContractClass> {
+        get_class_impls::get_compiled_casm_impl(self, block_id, class_hash)
+    }
+
     pub fn call(
         &mut self,
         block_id: &BlockId,
@@ -609,12 +632,15 @@ impl Starknet {
         let state = self.get_mut_state_at(block_id)?;
 
         state.assert_contract_deployed(ContractAddress::new(contract_address)?)?;
+        let storage_address = contract_address.try_into()?;
+        let class_hash = state.get_class_hash_at(storage_address)?;
 
         let call = CallEntryPoint {
             calldata: starknet_api::transaction::Calldata(std::sync::Arc::new(calldata.clone())),
             storage_address: contract_address.try_into()?,
             entry_point_selector: starknet_api::core::EntryPointSelector(entrypoint_selector),
             initial_gas: block_context.versioned_constants().tx_initial_gas(),
+            class_hash: Some(class_hash),
             ..Default::default()
         };
 
@@ -631,11 +657,18 @@ impl Starknet {
             )?;
 
         let mut transactional_state = CachedState::create_transactional(&mut state.state);
-        let res = call.execute(
-            &mut transactional_state,
-            &mut Default::default(),
-            &mut execution_context,
-        )?;
+        let res = call
+            .execute(&mut transactional_state, &mut Default::default(), &mut execution_context)
+            .map_err(|error| {
+                Error::ContractExecutionError(gen_tx_execution_error_trace(
+                    &TransactionExecutionError::ExecutionError {
+                        error,
+                        class_hash,
+                        storage_address,
+                        selector: starknet_api::core::EntryPointSelector(entrypoint_selector),
+                    },
+                ))
+            })?;
 
         Ok(res.execution.retdata.0)
     }
@@ -1014,6 +1047,17 @@ impl Starknet {
             .ok_or(Error::NoTransaction)
     }
 
+    pub fn get_unlimited_events(
+        &self,
+        from_block: Option<BlockId>,
+        to_block: Option<BlockId>,
+        address: Option<ContractAddress>,
+        keys: Option<Vec<Vec<Felt>>>,
+    ) -> DevnetResult<Vec<EmittedEvent>> {
+        events::get_events(self, from_block, to_block, address, keys, 0, None)
+            .map(|(emitted_events, _)| emitted_events)
+    }
+
     pub fn get_events(
         &self,
         from_block: Option<BlockId>,
@@ -1071,10 +1115,9 @@ impl Starknet {
     pub fn get_transaction_execution_and_finality_status(
         &self,
         transaction_hash: TransactionHash,
-    ) -> DevnetResult<(TransactionExecutionStatus, TransactionFinalityStatus)> {
+    ) -> DevnetResult<TransactionStatus> {
         let transaction = self.transactions.get(&transaction_hash).ok_or(Error::NoTransaction)?;
-
-        Ok((transaction.execution_result.status(), transaction.finality_status))
+        Ok(transaction.get_status())
     }
 
     pub fn simulate_transactions(
@@ -1105,16 +1148,18 @@ impl Starknet {
             transactions
                 .iter()
                 .enumerate()
-                .map(|(idx, txn)| {
+                .map(|(tx_idx, txn)| {
                     // According to this conversation https://spaceshard.slack.com/archives/C03HL8DH52N/p1710683496750409, simulating a transaction will:
                     // fail if the fee provided is 0
                     // succeed if the fee provided is 0 and SKIP_FEE_CHARGE is set
                     // succeed if the fee provided is > 0
                     if txn.is_max_fee_zero_value() && !skip_fee_charge {
-                        return Err(Error::ExecutionError {
-                            execution_error: TransactionValidationError::InsufficientMaxFee
-                                .to_string(),
-                            index: idx,
+                        return Err(Error::ContractExecutionErrorInSimulation {
+                            failure_index: tx_idx,
+                            error_stack: ErrorStack::from_str_err(
+                                &TransactionValidationError::InsufficientResourcesForValidate
+                                    .to_string(),
+                            ),
                         });
                     }
 
@@ -1134,19 +1179,19 @@ impl Starknet {
         let mut transactional_state =
             CachedState::new(CachedState::create_transactional(&mut state.state));
 
-        for (idx, (blockifier_transaction, transaction_type, skip_validate_due_to_impersonation)) in
+        for (tx_idx, (blockifier_tx, transaction_type, skip_validate_due_to_impersonation)) in
             blockifier_transactions.into_iter().enumerate()
         {
-            let tx_execution_info = blockifier_transaction
+            let tx_execution_info = blockifier_tx
                 .execute(
                     &mut transactional_state,
                     &block_context,
                     !skip_fee_charge,
                     !(skip_validate || skip_validate_due_to_impersonation),
                 )
-                .map_err(|err| Error::ExecutionError {
-                    execution_error: Error::from(err).to_string(),
-                    index: idx,
+                .map_err(|e| Error::ContractExecutionErrorInSimulation {
+                    failure_index: tx_idx,
+                    error_stack: gen_tx_execution_error_trace(&e),
                 })?;
 
             let block_number = block_context.block_info().block_number.0;
@@ -1339,6 +1384,30 @@ impl Starknet {
             Ok(false)
         }
     }
+
+    pub fn get_messages_status(
+        &self,
+        l1_tx_hash: Hash256,
+    ) -> Option<Vec<L1HandlerTransactionStatus>> {
+        match self.messaging.l1_to_l2_tx_hashes.get(&H256(*l1_tx_hash.as_bytes())) {
+            Some(l2_tx_hashes) => {
+                let mut statuses = vec![];
+                for l2_tx_hash in l2_tx_hashes {
+                    match self.transactions.get(l2_tx_hash) {
+                        Some(l2_tx) => statuses.push(L1HandlerTransactionStatus {
+                            transaction_hash: *l2_tx_hash,
+                            finality_status: l2_tx.finality_status,
+                            failure_reason: l2_tx.execution_info.revert_error.clone(),
+                        }),
+                        // should never happen due to handling in add_l1_handler_transaction
+                        None => return None,
+                    }
+                }
+                Some(statuses)
+            }
+            None => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1346,11 +1415,9 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use blockifier::execution::errors::{EntryPointExecutionError, PreExecutionError};
     use blockifier::state::state_api::{State, StateReader};
     use nonzero_ext::nonzero;
     use starknet_api::block::{BlockHash, BlockNumber, BlockStatus, BlockTimestamp, GasPrice};
-    use starknet_api::core::EntryPointSelector;
     use starknet_rs_core::types::{BlockId, BlockTag, Felt};
     use starknet_rs_core::utils::get_selector_from_name;
     use starknet_types::contract_address::ContractAddress;
@@ -1362,11 +1429,14 @@ mod tests {
     use crate::account::{Account, FeeToken};
     use crate::blocks::StarknetBlock;
     use crate::constants::{
+        ARGENT_CONTRACT_CLASS_HASH, ARGENT_MULTISIG_CONTRACT_CLASS_HASH,
+        CAIRO_0_ACCOUNT_CONTRACT_HASH, CAIRO_1_ACCOUNT_CONTRACT_SIERRA_HASH,
         DEVNET_DEFAULT_CHAIN_ID, DEVNET_DEFAULT_INITIAL_BALANCE,
         DEVNET_DEFAULT_STARTING_BLOCK_NUMBER, ETH_ERC20_CONTRACT_ADDRESS,
         STRK_ERC20_CONTRACT_ADDRESS,
     };
     use crate::error::{DevnetResult, Error};
+    use crate::stack_trace::{ErrorStack, Frame};
     use crate::starknet::starknet_config::{StarknetConfig, StateArchiveCapacity};
     use crate::traits::{Accounted, Deployed, HashIdentified};
     use crate::utils::test_utils::{
@@ -1628,6 +1698,21 @@ mod tests {
     }
 
     #[test]
+    fn assert_expected_predeclared_account_classes() {
+        let config = StarknetConfig { predeclare_argent: true, ..Default::default() };
+        let starknet = Starknet::new(&config).unwrap();
+        for class_hash in [
+            ARGENT_CONTRACT_CLASS_HASH,
+            ARGENT_MULTISIG_CONTRACT_CLASS_HASH,
+            Felt::from_hex_unchecked(CAIRO_0_ACCOUNT_CONTRACT_HASH),
+            Felt::from_hex_unchecked(CAIRO_1_ACCOUNT_CONTRACT_SIERRA_HASH),
+        ] {
+            let contract = starknet.get_class(&BlockId::Tag(BlockTag::Latest), class_hash).unwrap();
+            assert_eq!(contract.generate_hash().unwrap(), class_hash);
+        }
+    }
+
+    #[test]
     fn calling_method_of_undeployed_contract() {
         let config = StarknetConfig::default();
         let mut starknet = Starknet::new(&config).unwrap();
@@ -1660,9 +1745,22 @@ mod tests {
             entry_point_selector,
             vec![Felt::from(predeployed_account.account_address)],
         ) {
-            Err(Error::BlockifierExecutionError(EntryPointExecutionError::PreExecutionError(
-                PreExecutionError::EntryPointNotFound(EntryPointSelector(missing_selector)),
-            ))) => assert_eq!(missing_selector, entry_point_selector),
+            Err(Error::ContractExecutionError(ErrorStack { stack })) => match &stack[..] {
+                [Frame::EntryPoint(entry_point_frame), Frame::StringFrame(error_msg)] => {
+                    assert_eq!(
+                        entry_point_frame.selector,
+                        Some(starknet_api::core::EntryPointSelector(entry_point_selector))
+                    );
+                    assert_eq!(
+                        error_msg,
+                        &format!(
+                            "Entry point EntryPointSelector({}) not found in contract.\n",
+                            entry_point_selector.to_hex_string()
+                        )
+                    );
+                }
+                _ => panic!("Unexpected error stack: {stack:?}"),
+            },
             unexpected => panic!("Should have failed; got {unexpected:?}"),
         }
     }
