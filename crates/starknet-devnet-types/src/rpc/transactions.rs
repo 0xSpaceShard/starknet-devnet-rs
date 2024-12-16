@@ -20,7 +20,7 @@ use starknet_api::transaction::{Fee, Resource, Tip};
 use starknet_rs_core::crypto::compute_hash_on_elements;
 use starknet_rs_core::types::{
     BlockId, ExecutionResult, Felt, ResourceBounds, ResourceBoundsMapping,
-    TransactionFinalityStatus,
+    TransactionExecutionStatus, TransactionFinalityStatus,
 };
 use starknet_rs_crypto::poseidon_hash_many;
 
@@ -164,6 +164,16 @@ impl TransactionWithHash {
             execution_resources,
         }
     }
+
+    pub fn get_sender_address(&self) -> Option<ContractAddress> {
+        match &self.transaction {
+            Transaction::Declare(tx) => Some(tx.get_sender_address()),
+            Transaction::DeployAccount(tx) => Some(*tx.get_contract_address()),
+            Transaction::Deploy(_) => None,
+            Transaction::Invoke(tx) => Some(tx.get_sender_address()),
+            Transaction::L1Handler(tx) => Some(tx.contract_address),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,6 +181,14 @@ impl TransactionWithHash {
 pub struct TransactionWithReceipt {
     pub receipt: TransactionReceipt,
     pub transaction: Transaction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransactionStatus {
+    pub finality_status: TransactionFinalityStatus,
+    pub failure_reason: Option<String>,
+    pub execution_status: TransactionExecutionStatus,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -181,11 +199,30 @@ pub enum DeclareTransaction {
     V3(DeclareTransactionV3),
 }
 
+impl DeclareTransaction {
+    pub fn get_sender_address(&self) -> ContractAddress {
+        match self {
+            DeclareTransaction::V1(tx) => tx.sender_address,
+            DeclareTransaction::V2(tx) => tx.sender_address,
+            DeclareTransaction::V3(tx) => tx.sender_address,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum InvokeTransaction {
     V1(InvokeTransactionV1),
     V3(InvokeTransactionV3),
+}
+
+impl InvokeTransaction {
+    pub fn get_sender_address(&self) -> ContractAddress {
+        match self {
+            InvokeTransaction::V1(tx) => tx.sender_address,
+            InvokeTransaction::V3(tx) => tx.sender_address,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
@@ -1107,6 +1144,14 @@ impl FunctionInvocation {
             execution_resources,
         })
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct L1HandlerTransactionStatus {
+    pub transaction_hash: TransactionHash,
+    pub finality_status: TransactionFinalityStatus,
+    pub failure_reason: Option<String>,
 }
 
 #[cfg(test)]
