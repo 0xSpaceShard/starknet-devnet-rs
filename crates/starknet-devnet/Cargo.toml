@@ -37,6 +37,8 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 starknet-rs-providers = { workspace = true }
 
+# TODO clear this up now that there is a separate crate
+# TODO do we still need criterion if it's not used?
 [dev-dependencies]
 async-trait = { workspace = true }
 thiserror = { workspace = true }
@@ -53,9 +55,3 @@ usc = { workspace = true }
 reqwest = { workspace = true }
 criterion = { workspace = true }
 serial_test = { workspace = true }
-
-
-[[bench]]
-name = "mint_bench"
-harness = false
-path = "benches/mint_bench.rs"
