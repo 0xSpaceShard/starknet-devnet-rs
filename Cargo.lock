@@ -385,6 +385,7 @@ checksum = "3a6c9af12842a67734c9a2e355436e5d03b22383ed60cf13cd0c18fbfe3dcbcf"
 dependencies = [
  "async-trait",
  "axum-core",
+ "base64 0.21.7",
  "bytes",
  "futures-util",
  "http 1.1.0",
@@ -403,8 +404,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper 1.0.1",
  "tokio",
+ "tokio-tungstenite 0.21.0",
  "tower",
  "tower-layer",
  "tower-service",
@@ -2717,7 +2720,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.63",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.20.1",
  "tracing",
  "tracing-futures",
  "url",
@@ -5956,6 +5959,7 @@ dependencies = [
  "starknet-signers",
  "thiserror 1.0.63",
  "tokio",
+ "tokio-tungstenite 0.21.0",
  "tracing",
  "tracing-subscriber",
  "universal-sierra-compiler",
@@ -5968,6 +5972,7 @@ version = "0.2.3"
 dependencies = [
  "blockifier",
  "cairo-lang-starknet-classes",
+ "cairo-vm",
  "clap 4.5.17",
  "ethers",
  "hex",
@@ -5987,7 +5992,6 @@ dependencies = [
  "starknet_api",
  "thiserror 1.0.63",
  "tracing",
- "universal-sierra-compiler",
  "url",
 ]
 
@@ -6594,8 +6598,20 @@ dependencies = [
  "rustls 0.21.12",
  "tokio",
  "tokio-rustls 0.24.1",
- "tungstenite",
+ "tungstenite 0.20.1",
  "webpki-roots",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c83b561d025642014097b66e6c1bb422783339e0909e4429cde4749d1990bc38"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.21.0",
 ]
 
 [[package]]
@@ -6805,6 +6821,25 @@ dependencies = [
  "log",
  "rand",
  "rustls 0.21.12",
+ "sha1",
+ "thiserror 1.0.63",
+ "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ef1a641ea34f399a848dea702823bbecfb4c486f911735368f1f137cb8257e1"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http 1.1.0",
+ "httparse",
+ "log",
+ "rand",
  "sha1",
  "thiserror 1.0.63",
  "url",
