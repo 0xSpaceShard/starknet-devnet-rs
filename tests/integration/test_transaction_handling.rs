@@ -64,7 +64,7 @@ async fn test_declaration_rejected_if_casm_hash_not_matching() {
     let dummy_casm_hash = Felt::ONE;
 
     let declaration_result = account
-        .declare_v2(Arc::new(contract_class), dummy_casm_hash)
+        .declare_v3(Arc::new(contract_class), dummy_casm_hash)
         .nonce(Felt::ZERO)
         .send()
         .await;

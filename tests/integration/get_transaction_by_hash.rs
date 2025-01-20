@@ -16,39 +16,7 @@ use crate::common::utils::{
 };
 
 #[tokio::test]
-async fn get_declare_v1_transaction_by_hash_happy_path() {
-    let devnet = BackgroundDevnet::spawn_with_additional_args(&["--account-class", "cairo0"])
-        .await
-        .expect("Could not start Devnet");
-    let json_string =
-        std::fs::read_to_string("../../contracts/test_artifacts/cairo0/simple_contract.json")
-            .unwrap();
-
-    let legacy_contract_class: LegacyContractClass = serde_json::from_str(&json_string).unwrap();
-
-    let (signer, account_address) = devnet.get_first_predeployed_account().await;
-
-    let mut account = SingleOwnerAccount::new(
-        &devnet.json_rpc_client,
-        signer,
-        account_address,
-        constants::CHAIN_ID,
-        ExecutionEncoding::Legacy,
-    );
-    account.set_block_id(BlockId::Tag(BlockTag::Latest));
-
-    let declare_transaction = account
-        .declare_legacy(Arc::new(legacy_contract_class))
-        .nonce(Felt::ZERO)
-        .send()
-        .await
-        .unwrap();
-
-    assert_tx_successful(&declare_transaction.transaction_hash, &devnet.json_rpc_client).await;
-}
-
-#[tokio::test]
-async fn get_declare_v2_transaction_by_hash_happy_path() {
+async fn get_declare_v3_transaction_by_hash_happy_path() {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
 
     let (contract_class, casm_hash) = get_simple_contract_in_sierra_and_compiled_class_hash();
@@ -64,7 +32,7 @@ async fn get_declare_v2_transaction_by_hash_happy_path() {
     account.set_block_id(BlockId::Tag(BlockTag::Latest));
 
     let declare_result = account
-        .declare_v2(Arc::new(contract_class), casm_hash)
+        .declare_v3(Arc::new(contract_class), casm_hash)
         .nonce(Felt::ZERO)
         .send()
         .await
@@ -89,10 +57,10 @@ async fn get_deploy_account_transaction_by_hash_happy_path() {
     .unwrap();
 
     let salt = Felt::from_hex_unchecked("0x123");
-    let deployment = factory.deploy_v1(salt);
+    let deployment = factory.deploy_v3(salt);
     let deployment_address = deployment.address();
     let fee_estimation =
-        factory.deploy_v1(salt).fee_estimate_multiplier(1.0).estimate_fee().await.unwrap();
+        factory.deploy_v3(salt).gas_estimate_multiplier(1.0).estimate_fee().await.unwrap();
 
     // fund the account before deployment
     let mint_amount = fee_estimation.overall_fee * Felt::TWO;
@@ -103,7 +71,7 @@ async fn get_deploy_account_transaction_by_hash_happy_path() {
 }
 
 #[tokio::test]
-async fn get_invoke_v1_transaction_by_hash_happy_path() {
+async fn get_invoke_v3_transaction_by_hash_happy_path() {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
     let (signer, account_address) = devnet.get_first_predeployed_account().await;
 
@@ -116,7 +84,7 @@ async fn get_invoke_v1_transaction_by_hash_happy_path() {
     );
 
     let invoke_tx_result = account
-        .execute_v1(vec![Call {
+        .execute_v3(vec![Call {
             to: ETH_ERC20_CONTRACT_ADDRESS,
             selector: get_selector_from_name("transfer").unwrap(),
             calldata: vec![

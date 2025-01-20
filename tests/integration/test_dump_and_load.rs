@@ -171,10 +171,10 @@ async fn mint_dump_on_transaction_and_load() {
     let loaded_transaction_1 =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash_1).await.unwrap();
     if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(invoke_v1),
+        starknet_rs_core::types::InvokeTransaction::V1(tx),
     ) = loaded_transaction_1
     {
-        assert_eq!(invoke_v1.transaction_hash, mint_tx_hash_1);
+        assert_eq!(tx.transaction_hash, mint_tx_hash_1);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction_1:?}");
     }
@@ -182,10 +182,10 @@ async fn mint_dump_on_transaction_and_load() {
     let loaded_transaction_2 =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash_2).await.unwrap();
     if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(invoke_v1),
+        starknet_rs_core::types::InvokeTransaction::V1(tx),
     ) = loaded_transaction_2
     {
-        assert_eq!(invoke_v1.transaction_hash, mint_tx_hash_2);
+        assert_eq!(tx.transaction_hash, mint_tx_hash_2);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction_2:?}");
     }
@@ -253,7 +253,7 @@ async fn declare_deploy() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(cairo_1_contract), casm_class_hash)
+        .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -265,7 +265,7 @@ async fn declare_deploy() {
     let contract_factory =
         ContractFactory::new(declaration_result.class_hash, predeployed_account.clone());
     let deploy_result = contract_factory
-        .deploy_v1(vec![], Felt::ZERO, false)
+        .deploy_v3(vec![], Felt::ZERO, false)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await

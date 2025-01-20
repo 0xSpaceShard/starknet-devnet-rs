@@ -34,7 +34,7 @@ async fn deploy_account_transaction_receipt() {
     .unwrap();
     let new_account_nonce = Felt::ZERO;
     let salt = Felt::THREE;
-    let deployment = account_factory.deploy_v1(salt).nonce(new_account_nonce);
+    let deployment = account_factory.deploy_v3(salt).nonce(new_account_nonce);
     let new_account_address = deployment.address();
     devnet.mint(new_account_address, 1e18 as u128).await;
 
@@ -77,8 +77,7 @@ async fn deploy_transaction_receipt() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(cairo_1_contract), casm_class_hash)
-        .max_fee(max_fee)
+        .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
         .send()
         .await
         .unwrap();
@@ -90,7 +89,7 @@ async fn deploy_transaction_receipt() {
     let salt = Felt::ZERO;
     let constructor_args = Vec::<Felt>::new();
     let deployment_result = contract_factory
-        .deploy_v1(constructor_args.clone(), salt, false)
+        .deploy_v3(constructor_args.clone(), salt, false)
         .max_fee(max_fee)
         .send()
         .await
@@ -138,7 +137,7 @@ async fn invalid_deploy_transaction_receipt() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(cairo_1_contract), casm_class_hash)
+        .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
         .max_fee(max_fee)
         .send()
         .await
@@ -151,7 +150,7 @@ async fn invalid_deploy_transaction_receipt() {
     let salt = Felt::ZERO;
     let invalid_constructor_args = vec![Felt::ONE];
     let invalid_deployment_result = contract_factory
-        .deploy_v1(invalid_constructor_args, salt, false)
+        .deploy_v3(invalid_constructor_args, salt, false)
         .max_fee(max_fee)
         .send()
         .await
@@ -190,7 +189,7 @@ async fn reverted_invoke_transaction_receipt() {
         ExecutionEncoding::New,
     );
 
-    let transfer_execution = predeployed_account.execute_v1(vec![Call {
+    let transfer_execution = predeployed_account.execute_v3(vec![Call {
         to: ETH_ERC20_CONTRACT_ADDRESS,
         selector: get_selector_from_name("transfer").unwrap(),
         calldata: vec![

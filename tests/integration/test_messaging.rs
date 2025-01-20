@@ -63,7 +63,7 @@ async fn withdraw<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount, l1_address],
     }];
 
-    account.execute_v1(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
+    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
 }
 
 /// Increases the balance for the given user.
@@ -79,7 +79,7 @@ async fn increase_balance<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount],
     }];
 
-    account.execute_v1(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
+    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
 }
 
 /// Gets the balance for the given user.
@@ -109,7 +109,7 @@ async fn withdraw_from_lib<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount, l1_address, lib_class_hash],
     }];
 
-    account.execute_v1(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await
+    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await
 }
 
 /// Returns the deployment address
@@ -121,7 +121,7 @@ async fn deploy_l2_msg_contract(
         get_messaging_contract_in_sierra_and_compiled_class_hash();
 
     let sierra_class_hash = sierra_class.class_hash();
-    let declaration = account.declare_v2(Arc::new(sierra_class), casm_class_hash);
+    let declaration = account.declare_v3(Arc::new(sierra_class), casm_class_hash);
     declaration.max_fee(Felt::from(MAX_FEE)).send().await?;
 
     // deploy instance of class
@@ -135,7 +135,7 @@ async fn deploy_l2_msg_contract(
         &constructor_calldata,
     );
     contract_factory
-        .deploy_v1(constructor_calldata, salt, false)
+        .deploy_v3(constructor_calldata, salt, false)
         .nonce(Felt::ONE)
         .max_fee(Felt::from(MAX_FEE))
         .send()
@@ -225,7 +225,7 @@ async fn can_send_message_to_l1_from_library_syscall() {
     let lib_sierra_class_hash = sierra_class.class_hash();
 
     account
-        .declare_v2(Arc::new(sierra_class), casm_class_hash)
+        .declare_v3(Arc::new(sierra_class), casm_class_hash)
         .max_fee(Felt::from(MAX_FEE))
         .send()
         .await

@@ -247,7 +247,7 @@ async fn test_origin_declare_deploy_fork_invoke() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(contract_class), casm_class_hash)
+        .declare_v3(Arc::new(contract_class), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -259,7 +259,7 @@ async fn test_origin_declare_deploy_fork_invoke() {
     let initial_value = Felt::from(10_u32);
     let ctor_args = vec![initial_value];
     contract_factory
-        .deploy_v1(ctor_args.clone(), Felt::ZERO, false)
+        .deploy_v3(ctor_args.clone(), Felt::ZERO, false)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -297,7 +297,7 @@ async fn test_origin_declare_deploy_fork_invoke() {
     }];
 
     let invoke_result = fork_predeployed_account
-        .execute_v1(contract_invoke.clone())
+        .execute_v3(contract_invoke.clone())
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -332,7 +332,7 @@ async fn test_deploying_account_with_class_not_present_on_origin() {
     .unwrap();
 
     let salt = Felt::from_hex_unchecked("0x123");
-    let deployment = factory.deploy_v1(salt).max_fee(Felt::from(1e18 as u128)).send().await;
+    let deployment = factory.deploy_v3(salt).max_fee(Felt::from(1e18 as u128)).send().await;
     match deployment {
         Err(AccountFactoryError::Provider(ProviderError::StarknetError(
             StarknetError::ClassHashNotFound,
@@ -375,7 +375,7 @@ async fn test_deploying_account_with_class_present_on_origin() {
     .unwrap();
 
     let salt = Felt::from_hex_unchecked("0x123");
-    let deployment = factory.deploy_v1(salt).max_fee(Felt::from(1e18 as u128));
+    let deployment = factory.deploy_v3(salt).max_fee(Felt::from(1e18 as u128));
     let deployment_address = deployment.address();
     fork_devnet.mint(deployment_address, 1e18 as u128).await;
     deployment.send().await.unwrap();

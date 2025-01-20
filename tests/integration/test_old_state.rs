@@ -45,7 +45,7 @@ async fn get_storage_from_an_old_state() {
     let amount = Felt::from(1_000_000_000);
 
     account
-        .execute_v1(vec![Call {
+        .execute_v3(vec![Call {
             to: ETH_ERC20_CONTRACT_ADDRESS,
             selector: get_selector_from_name("transfer").unwrap(),
             calldata: vec![
@@ -110,8 +110,8 @@ async fn minting_in_multiple_steps_and_getting_balance_at_each_block() {
 // estimate fee of invoke transaction that reverts must fail, but simulating the same invoke
 // transaction have to produce trace of a reverted transaction
 #[tokio::test]
-async fn estimate_fee_and_simulate_transaction_for_contract_deployment_in_an_old_block_should_not_produce_the_same_error()
- {
+async fn estimate_fee_and_simulate_transaction_for_contract_deployment_in_an_old_block_should_not_produce_the_same_error(
+) {
     let devnet =
         BackgroundDevnet::spawn_with_additional_args(&["--state-archive-capacity", "full"])
             .await
@@ -139,7 +139,7 @@ async fn estimate_fee_and_simulate_transaction_for_contract_deployment_in_an_old
 
     // declare class
     let declaration_result =
-        account.declare_v2(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
+        account.declare_v3(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
     assert_eq!(declaration_result.class_hash, class_hash);
 
     let calls = vec![Call {
@@ -233,7 +233,7 @@ async fn test_getting_class_at_various_blocks() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(contract_class.clone()), casm_class_hash)
+        .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -298,7 +298,7 @@ async fn test_nonce_retrieval_for_an_old_state() {
         .unwrap();
 
     account
-        .execute_v1(vec![Call {
+        .execute_v3(vec![Call {
             to: ETH_ERC20_CONTRACT_ADDRESS,
             selector: get_selector_from_name("transfer").unwrap(),
             calldata: vec![

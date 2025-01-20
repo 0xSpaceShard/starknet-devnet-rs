@@ -300,7 +300,7 @@ async fn blocks_on_demand_declarations() {
     let mut declaration_results = vec![];
     for (nonce, (class, casm_hash)) in classes_with_hash.iter().enumerate() {
         let declaration_result = predeployed_account
-            .declare_v2(Arc::new(class.clone()), *casm_hash)
+            .declare_v3(Arc::new(class.clone()), *casm_hash)
             .max_fee(Felt::from(1e18 as u128))
             .nonce(Felt::from(nonce))
             .send()
@@ -379,7 +379,7 @@ async fn blocks_on_demand_invoke_and_call() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(contract_class), casm_class_hash)
+        .declare_v3(Arc::new(contract_class), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .nonce(Felt::ZERO)
         .send()
@@ -394,7 +394,7 @@ async fn blocks_on_demand_invoke_and_call() {
     let initial_value = Felt::from(10_u32);
     let ctor_args = vec![initial_value];
     let deploy_result = contract_factory
-        .deploy_v1(ctor_args.clone(), Felt::ZERO, false)
+        .deploy_v3(ctor_args.clone(), Felt::ZERO, false)
         .max_fee(Felt::from(1e18 as u128))
         .nonce(Felt::ONE)
         .send()
@@ -420,7 +420,7 @@ async fn blocks_on_demand_invoke_and_call() {
     let increment_count = 2;
     for i in 1..=increment_count {
         let invoke_result = predeployed_account
-            .execute_v1(contract_invoke.clone())
+            .execute_v3(contract_invoke.clone())
             .max_fee(Felt::from(1e18 as u128))
             .nonce(Felt::from(i + 1_u128))
             .send()

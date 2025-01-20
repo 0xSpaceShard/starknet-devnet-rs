@@ -65,11 +65,11 @@ async fn estimate_fee_of_deploy_account() {
 
     // fund address
     let salt = Felt::from_hex_unchecked("0x123");
-    let deployment = account_factory.deploy_v1(salt);
+    let deployment = account_factory.deploy_v3(salt);
     let deployment_address = deployment.address();
     let fee_estimation = account_factory
-        .deploy_v1(salt)
-        .fee_estimate_multiplier(1.0)
+        .deploy_v3(salt)
+        .gas_estimate_multiplier(1.0)
         .nonce(new_account_nonce)
         .estimate_fee()
         .await
@@ -82,7 +82,7 @@ async fn estimate_fee_of_deploy_account() {
 
     // try sending with insufficient max fee
     let unsuccessful_deployment_tx = account_factory
-        .deploy_v1(salt)
+        .deploy_v3(salt)
         .max_fee(fee_estimation.overall_fee - Felt::ONE)
         .nonce(new_account_nonce)
         .send()
@@ -96,7 +96,7 @@ async fn estimate_fee_of_deploy_account() {
 
     // try sending with sufficient max fee
     let successful_deployment = account_factory
-        .deploy_v1(salt)
+        .deploy_v3(salt)
         .max_fee(multiply_field_element(fee_estimation.overall_fee, 1.1))
         .nonce(new_account_nonce)
         .send()
@@ -123,7 +123,7 @@ async fn estimate_fee_of_invalid_deploy_account() {
 
     let salt = Felt::from_hex_unchecked("0x123");
     let err = account_factory
-        .deploy_v1(salt)
+        .deploy_v3(salt)
         .nonce(new_account_nonce)
         .estimate_fee()
         .await
@@ -137,61 +137,7 @@ async fn estimate_fee_of_invalid_deploy_account() {
 }
 
 #[tokio::test]
-async fn estimate_fee_of_declare_v1() {
-    let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
-
-    // get account
-    let (signer, account_address) = devnet.get_first_predeployed_account().await;
-
-    // get class
-    let contract_artifact = dummy_cairo_0_contract_class();
-    let contract_artifact = Arc::new(serde_json::from_value(contract_artifact.inner).unwrap());
-
-    // declare class
-    let account = SingleOwnerAccount::new(
-        devnet.clone_provider(),
-        signer,
-        account_address,
-        CHAIN_ID,
-        ExecutionEncoding::New,
-    );
-
-    let fee_estimation = account
-        .declare_legacy(Arc::clone(&contract_artifact))
-        .nonce(Felt::ZERO)
-        .fee_estimate_multiplier(1.0)
-        .estimate_fee()
-        .await
-        .unwrap();
-    assert_fee_estimation(&fee_estimation);
-
-    // try sending with insufficient max fee
-    let unsuccessful_declare_tx = account
-        .declare_legacy(Arc::clone(&contract_artifact))
-        .nonce(Felt::ZERO)
-        .max_fee(fee_estimation.overall_fee - Felt::ONE)
-        .send()
-        .await;
-    match unsuccessful_declare_tx {
-        Err(AccountError::Provider(ProviderError::StarknetError(
-            StarknetError::InsufficientMaxFee,
-        ))) => (),
-        other => panic!("Unexpected result: {other:?}"),
-    };
-
-    // try sending with sufficient max fee
-    let successful_declare_tx = account
-        .declare_legacy(contract_artifact)
-        .nonce(Felt::ZERO)
-        .max_fee(multiply_field_element(fee_estimation.overall_fee, 1.1))
-        .send()
-        .await
-        .unwrap();
-    assert_tx_successful(&successful_declare_tx.transaction_hash, &devnet.json_rpc_client).await;
-}
-
-#[tokio::test]
-async fn estimate_fee_of_declare_v2() {
+async fn estimate_fee_of_declare_v3() {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
 
     // get account
@@ -215,9 +161,9 @@ async fn estimate_fee_of_declare_v2() {
     let mut fee_estimations: Vec<FeeEstimate> = vec![];
     for _ in 0..2 {
         let fee_estimation = account
-            .declare_v2(Arc::clone(&flattened_contract_artifact), casm_hash)
+            .declare_v3(Arc::clone(&flattened_contract_artifact), casm_hash)
             .nonce(Felt::ZERO)
-            .fee_estimate_multiplier(1.0)
+            .gas_estimate_multiplier(1.0)
             .estimate_fee()
             .await
             .unwrap();
@@ -226,12 +172,15 @@ async fn estimate_fee_of_declare_v2() {
     }
     assert_eq!(fee_estimations[0], fee_estimations[1]);
     let fee_estimation = &fee_estimations[0];
+    let gas_estimation: u64 = fee_estimation.gas_consumed.try_into().unwrap();
+    let gas_price_estimation: u128 = fee_estimation.gas_price.try_into().unwrap();
 
     // try sending with insufficient max fee
     let unsuccessful_declare_tx = account
-        .declare_v2(Arc::clone(&flattened_contract_artifact), casm_hash)
+        .declare_v3(Arc::clone(&flattened_contract_artifact), casm_hash)
         .nonce(Felt::ZERO)
-        .max_fee(fee_estimation.overall_fee - Felt::ONE)
+        .gas(gas_estimation - 1)
+        .gas_price(gas_price_estimation)
         .send()
         .await;
     match unsuccessful_declare_tx {
@@ -243,9 +192,10 @@ async fn estimate_fee_of_declare_v2() {
 
     // try sending with sufficient max fee
     let successful_declare_tx = account
-        .declare_v2(Arc::clone(&flattened_contract_artifact), casm_hash)
+        .declare_v3(Arc::clone(&flattened_contract_artifact), casm_hash)
         .nonce(Felt::ZERO)
-        .max_fee(multiply_field_element(fee_estimation.overall_fee, 1.1))
+        .gas(gas_estimation * 11 / 10)
+        .gas_price(gas_price_estimation)
         .send()
         .await
         .unwrap();
@@ -293,7 +243,7 @@ async fn estimate_fee_of_invoke() {
         &constructor_calldata,
     );
     contract_factory
-        .deploy_v1(constructor_calldata, salt, false)
+        .deploy_v3(constructor_calldata, salt, false)
         .send()
         .await
         .expect("Cannot deploy");
@@ -308,8 +258,8 @@ async fn estimate_fee_of_invoke() {
 
     // estimate the fee
     let fee_estimation = account
-        .execute_v1(invoke_calls.clone())
-        .fee_estimate_multiplier(1.0)
+        .execute_v3(invoke_calls.clone())
+        .gas_estimate_multiplier(1.0)
         .estimate_fee()
         .await
         .unwrap();
@@ -325,7 +275,7 @@ async fn estimate_fee_of_invoke() {
     // invoke with insufficient max_fee
     let insufficient_max_fee = fee_estimation.overall_fee - Felt::ONE;
     let unsuccessful_invoke_tx = account
-        .execute_v1(invoke_calls.clone())
+        .execute_v3(invoke_calls.clone())
         .max_fee(insufficient_max_fee)
         .send()
         .await
@@ -344,7 +294,7 @@ async fn estimate_fee_of_invoke() {
     // invoke with sufficient max_fee
     let sufficient_max_fee = multiply_field_element(fee_estimation.overall_fee, 1.1);
 
-    account.execute_v1(invoke_calls).max_fee(sufficient_max_fee).send().await.unwrap();
+    account.execute_v3(invoke_calls).max_fee(sufficient_max_fee).send().await.unwrap();
     let balance_after_sufficient =
         devnet.json_rpc_client.call(call, BlockId::Tag(BlockTag::Latest)).await.unwrap();
     assert_eq!(balance_after_sufficient, vec![increase_amount]);
@@ -371,7 +321,7 @@ async fn message_available_if_estimation_reverts() {
 
     // declare class
     let declaration_result =
-        account.declare_v2(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
+        account.declare_v3(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
     assert_eq!(declaration_result.class_hash, class_hash);
 
     // deploy instance of class
@@ -385,7 +335,7 @@ async fn message_available_if_estimation_reverts() {
         &constructor_calldata,
     );
     contract_factory
-        .deploy_v1(constructor_calldata, salt, false)
+        .deploy_v3(constructor_calldata, salt, false)
         .send()
         .await
         .expect("Cannot deploy");
@@ -398,7 +348,7 @@ async fn message_available_if_estimation_reverts() {
     }];
 
     let invoke_err = account
-        .execute_v1(calls.clone())
+        .execute_v3(calls.clone())
         .nonce(account.get_nonce().await.unwrap())
         .max_fee(Felt::ZERO)
         .estimate_fee()
@@ -437,7 +387,7 @@ async fn using_query_version_if_estimating() {
 
     // declare class
     let declaration_result =
-        account.declare_v2(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
+        account.declare_v3(Arc::new(flattened_contract_artifact), casm_hash).send().await.unwrap();
     assert_eq!(declaration_result.class_hash, class_hash);
 
     // deploy instance of class
@@ -451,7 +401,7 @@ async fn using_query_version_if_estimating() {
         &constructor_calldata,
     );
     contract_factory
-        .deploy_v1(constructor_calldata, salt, false)
+        .deploy_v3(constructor_calldata, salt, false)
         .send()
         .await
         .expect("Cannot deploy");
@@ -463,7 +413,7 @@ async fn using_query_version_if_estimating() {
         calldata: vec![expected_version],
     }];
 
-    match account.execute_v1(calls).estimate_fee().await {
+    match account.execute_v3(calls).estimate_fee().await {
         Ok(_) => (),
         other => panic!("Unexpected result: {other:?}"),
     }
@@ -520,7 +470,7 @@ async fn estimate_fee_of_multiple_txs() {
     let calldata = account.encode_calls(&calls);
 
     let prepared_invoke =
-        account.execute_v1(calls).nonce(Felt::ONE).max_fee(Felt::ZERO).prepared().unwrap();
+        account.execute_v3(calls).nonce(Felt::ONE).max_fee(Felt::ZERO).prepared().unwrap();
 
     let deployment_signature =
         signer.sign_hash(&prepared_invoke.transaction_hash(query_only)).await.unwrap();
@@ -563,8 +513,8 @@ async fn estimate_fee_of_multiple_txs() {
 }
 
 #[tokio::test]
-async fn estimate_fee_of_declare_and_deploy_via_udc_returns_index_of_second_transaction_when_executed_with_non_existing_method()
- {
+async fn estimate_fee_of_declare_and_deploy_via_udc_returns_index_of_second_transaction_when_executed_with_non_existing_method(
+) {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start devnet");
 
     // get account

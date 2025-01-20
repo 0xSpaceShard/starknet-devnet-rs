@@ -273,7 +273,7 @@ pub async fn deploy_oz_account(
     )
     .await?;
 
-    let deployment = factory.deploy_v1(salt);
+    let deployment = factory.deploy_v3(salt);
 
     let account_address = deployment.address();
     devnet.mint(account_address, 1e18 as u128).await;
@@ -297,7 +297,7 @@ pub async fn deploy_argent_account(
     )
     .await?;
 
-    let deployment = factory.deploy_v1(salt);
+    let deployment = factory.deploy_v3(salt);
 
     let account_address = deployment.address();
     devnet.mint(account_address, 1e18 as u128).await;

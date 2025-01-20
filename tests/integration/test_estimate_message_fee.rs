@@ -51,7 +51,7 @@ async fn estimate_message_fee() {
         &constructor_calldata,
     );
     contract_factory
-            .deploy_v1(constructor_calldata, salt, false)
+            .deploy_v3(constructor_calldata, salt, false)
             .nonce(Felt::ONE)
             // max fee implicitly estimated
             .send()

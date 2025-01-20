@@ -160,7 +160,7 @@ async fn can_declare_deploy_invoke_cairo0_using_account(
         &constructor_calldata,
     );
     contract_factory
-        .deploy_v1(constructor_calldata, salt, false)
+        .deploy_v3(constructor_calldata, salt, false)
         .send()
         .await
         .expect("Cannot deploy");
@@ -172,7 +172,7 @@ async fn can_declare_deploy_invoke_cairo0_using_account(
         selector: get_selector_from_name("increase_balance").unwrap(),
         calldata: vec![increase_amount],
     }];
-    account.execute_v1(invoke_calls).send().await.unwrap();
+    account.execute_v3(invoke_calls).send().await.unwrap();
 
     // prepare the call used in checking the balance
     let call = FunctionCall {
@@ -202,13 +202,13 @@ async fn can_declare_deploy_invoke_cairo1_using_account(
 
     // declare the contract
     let declaration_result =
-        account.declare_v2(Arc::new(contract_class), casm_hash).send().await.unwrap();
+        account.declare_v3(Arc::new(contract_class), casm_hash).send().await.unwrap();
 
     // deploy the contract
     let contract_factory = ContractFactory::new(declaration_result.class_hash, account.clone());
     let initial_value = Felt::from(10_u32);
     let ctor_args = vec![initial_value];
-    contract_factory.deploy_v1(ctor_args.clone(), Felt::ZERO, false).send().await.unwrap();
+    contract_factory.deploy_v3(ctor_args.clone(), Felt::ZERO, false).send().await.unwrap();
 
     // generate the address of the newly deployed contract
     let contract_address = get_udc_deployed_address(
@@ -226,7 +226,7 @@ async fn can_declare_deploy_invoke_cairo1_using_account(
         calldata: vec![increment, Felt::ZERO],
     }];
 
-    let invoke_result = account.execute_v1(contract_invoke.clone()).send().await.unwrap();
+    let invoke_result = account.execute_v3(contract_invoke.clone()).send().await.unwrap();
 
     assert_tx_successful(&invoke_result.transaction_hash, &devnet.json_rpc_client).await;
 }

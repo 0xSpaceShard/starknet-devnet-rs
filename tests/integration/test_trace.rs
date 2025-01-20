@@ -100,7 +100,7 @@ async fn get_declare_trace() {
 
     // declare the contract
     let declaration_result = predeployed_account
-        .declare_v2(Arc::new(cairo_1_contract), casm_class_hash)
+        .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -154,7 +154,7 @@ async fn test_contract_deployment_trace() {
 
     // declare the contract
     let declaration_result = account
-        .declare_v2(Arc::new(cairo_1_contract), casm_class_hash)
+        .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
         .max_fee(Felt::from(1e18 as u128))
         .send()
         .await
@@ -165,7 +165,7 @@ async fn test_contract_deployment_trace() {
     for salt in (0_u32..2).map(Felt::from) {
         let ctor_data = vec![];
         let deployment_tx = contract_factory
-            .deploy_v1(ctor_data.clone(), salt, false)
+            .deploy_v3(ctor_data.clone(), salt, false)
             .max_fee(Felt::from(1e18 as u128))
             .send()
             .await
@@ -215,7 +215,7 @@ async fn get_deploy_account_trace() {
 
     // deploy account
     let deployment = account_factory
-        .deploy_v1(Felt::from_hex_unchecked("0x123"))
+        .deploy_v3(Felt::from_hex_unchecked("0x123"))
         .max_fee(Felt::from(1e18 as u128))
         .nonce(Felt::ZERO)
         .prepared()

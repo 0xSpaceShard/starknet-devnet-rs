@@ -66,7 +66,7 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: &str) {
     let nonce = Felt::ZERO;
 
     let declaration = account
-        .declare_v2(Arc::new(flattened_contract_artifact.clone()), casm_hash)
+        .declare_v3(Arc::new(flattened_contract_artifact.clone()), casm_hash)
         .max_fee(max_fee)
         .nonce(nonce)
         .prepared()
@@ -283,7 +283,7 @@ async fn unsuccessful_declare_set_gas_successful_declare() {
     let max_gas_fee = Felt::from(1e14 as u128);
 
     let unsuccessful_declare_tx = predeployed_account
-        .declare_v2(Arc::new(contract_class.clone()), casm_class_hash)
+        .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
         .max_fee(max_gas_fee)
         .send()
         .await;
@@ -316,7 +316,7 @@ async fn unsuccessful_declare_set_gas_successful_declare() {
     );
 
     let successful_declare_tx = predeployed_account
-        .declare_v2(Arc::new(contract_class), casm_class_hash)
+        .declare_v3(Arc::new(contract_class), casm_class_hash)
         .max_fee(max_gas_fee)
         .send()
         .await
