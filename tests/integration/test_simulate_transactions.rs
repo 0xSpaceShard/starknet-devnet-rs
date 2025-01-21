@@ -123,11 +123,13 @@ async fn simulate_declare_v2() {
         get_flattened_sierra_contract_and_casm_hash(CAIRO_1_CONTRACT_PATH);
 
     let max_fee = Felt::ZERO;
+    let max_gas = 0;
+    // TODO max_gas_price?
     let nonce = Felt::ZERO;
 
     let declaration = account
         .declare_v3(Arc::new(flattened_contract_artifact.clone()), casm_hash)
-        .max_fee(max_fee)
+        .gas(max_gas)
         .nonce(nonce)
         .prepared()
         .unwrap();
@@ -189,10 +191,13 @@ async fn simulate_deploy_account() {
 
     let nonce = Felt::ZERO;
     let salt_hex = "0x123";
-    let max_fee = Felt::from(1e18 as u128);
+    let max_gas = 1e18 as u64;
+    let max_gas_price = 1_u128;
+    let max_fee = Felt::from(max_gas as u128 * max_gas_price);
     let deployment = account_factory
         .deploy_v3(Felt::from_hex_unchecked(salt_hex))
-        .max_fee(max_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .nonce(nonce)
         .prepared()
         .unwrap();
@@ -328,10 +333,17 @@ async fn simulate_invoke_v1() {
     }];
 
     // TODO fails if max_fee too low, can be used to test reverted case
-    let max_fee = Felt::from(1e18 as u128);
+    let max_gas = 1e18 as u64;
+    let max_gas_price = 1_u128;
+    let max_fee = Felt::from(max_gas as u128 * max_gas_price);
     let nonce = Felt::TWO; // after declare+deploy
-    let invoke_request =
-        account.execute_v3(calls.clone()).max_fee(max_fee).nonce(nonce).prepared().unwrap();
+    let invoke_request = account
+        .execute_v3(calls.clone())
+        .gas(max_gas)
+        .gas_price(max_gas_price)
+        .nonce(nonce)
+        .prepared()
+        .unwrap();
 
     let signature = signer.sign_hash(&invoke_request.transaction_hash(false)).await.unwrap();
     let sender_address_hex = to_hex_felt(&account.address());
@@ -425,10 +437,17 @@ async fn using_query_version_if_simulating() {
         calldata: vec![QUERY_VERSION_OFFSET + Felt::ONE], // expected version
     }];
 
-    let max_fee = Felt::from(1e18 as u128);
+    let max_gas = 1e18 as u64;
+    let max_gas_price = 1_u128;
+    let max_fee = Felt::from(max_gas as u128 * max_gas_price);
     let nonce = Felt::TWO; // after declare+deploy
-    let invoke_request =
-        account.execute_v3(calls.clone()).max_fee(max_fee).nonce(nonce).prepared().unwrap();
+    let invoke_request = account
+        .execute_v3(calls.clone())
+        .gas(max_gas)
+        .gas_price(max_gas_price)
+        .nonce(nonce)
+        .prepared()
+        .unwrap();
 
     let signature = signer.sign_hash(&invoke_request.transaction_hash(false)).await.unwrap();
     let invoke_simulation_body = json!({
@@ -646,8 +665,8 @@ async fn simulate_of_multiple_txs_should_return_index_of_first_failing_transacti
 }
 
 #[tokio::test]
-async fn simulate_with_max_fee_exceeding_account_balance_returns_error_if_fee_charge_is_not_skipped(
-) {
+async fn simulate_with_max_fee_exceeding_account_balance_returns_error_if_fee_charge_is_not_skipped()
+ {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
     let (sierra_artifact, casm_hash) =
         get_flattened_sierra_contract_and_casm_hash(CAIRO_1_PANICKING_CONTRACT_SIERRA_PATH);
@@ -686,8 +705,8 @@ async fn simulate_with_max_fee_exceeding_account_balance_returns_error_if_fee_ch
 }
 
 #[tokio::test]
-async fn simulate_v3_with_skip_fee_charge_deploy_account_declare_deploy_via_invoke_to_udc_happy_path(
-) {
+async fn simulate_v3_with_skip_fee_charge_deploy_account_declare_deploy_via_invoke_to_udc_happy_path()
+ {
     let devnet = BackgroundDevnet::spawn_with_additional_args(&["--account-class", "cairo1"])
         .await
         .expect("Could not start Devnet");
@@ -847,8 +866,8 @@ async fn simulate_v3_with_skip_fee_charge_deploy_account_declare_deploy_via_invo
 }
 
 #[tokio::test]
-async fn simulate_invoke_v3_with_fee_just_below_estimated_should_return_a_trace_of_reverted_transaction(
-) {
+async fn simulate_invoke_v3_with_fee_just_below_estimated_should_return_a_trace_of_reverted_transaction()
+ {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
     let (sierra_artifact, casm_hash) =
         get_flattened_sierra_contract_and_casm_hash(CAIRO_1_PANICKING_CONTRACT_SIERRA_PATH);
@@ -895,8 +914,8 @@ async fn simulate_invoke_v3_with_fee_just_below_estimated_should_return_a_trace_
 }
 
 #[tokio::test]
-async fn simulate_invoke_declare_deploy_account_with_either_gas_or_gas_price_set_to_zero_or_both_will_revert_if_skip_fee_charge_is_not_set(
-) {
+async fn simulate_invoke_declare_deploy_account_with_either_gas_or_gas_price_set_to_zero_or_both_will_revert_if_skip_fee_charge_is_not_set()
+ {
     let devnet = BackgroundDevnet::spawn_with_additional_args(&["--account-class", "cairo1"])
         .await
         .expect("Could not start Devnet");
@@ -1076,8 +1095,8 @@ async fn simulate_invoke_v3_with_failing_execution_should_return_a_trace_of_reve
 /// Test with lower than (estimated_gas_units * gas_price) using two flags. With
 /// skip_fee_transfer shouldnt fail, without it should fail.
 #[tokio::test]
-async fn simulate_declare_v3_with_less_than_estimated_fee_should_revert_if_fee_charge_is_not_skipped(
-) {
+async fn simulate_declare_v3_with_less_than_estimated_fee_should_revert_if_fee_charge_is_not_skipped()
+ {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
     let (sierra_artifact, casm_hash) = get_simple_contract_in_sierra_and_compiled_class_hash();
 

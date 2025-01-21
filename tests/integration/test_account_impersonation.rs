@@ -102,8 +102,8 @@ async fn test_impersonated_of_a_predeployed_account_account_can_send_transaction
 }
 
 #[tokio::test]
-async fn non_impersonated_account_fails_to_make_a_transaction_and_receives_an_error_of_invalid_signature(
-) {
+async fn non_impersonated_account_fails_to_make_a_transaction_and_receives_an_error_of_invalid_signature()
+ {
     let origin_devnet = BackgroundDevnet::spawn_forkable_devnet().await.unwrap();
 
     let invoke_txn_err = test_invoke_transaction(&origin_devnet, &[]).await.unwrap_err();
@@ -122,8 +122,8 @@ async fn test_auto_impersonate_allows_user_to_send_transactions() {
 }
 
 #[tokio::test]
-async fn test_impersonate_account_and_then_stop_impersonate_have_to_return_an_error_of_invalid_signature(
-) {
+async fn test_impersonate_account_and_then_stop_impersonate_have_to_return_an_error_of_invalid_signature()
+ {
     let origin_devnet = &BackgroundDevnet::spawn_forkable_devnet().await.unwrap();
     let (_, account_address) = origin_devnet.get_first_predeployed_account().await;
     let invoke_txn_err = test_invoke_transaction(

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use starknet_rs_accounts::{Account, ExecutionEncoding, SingleOwnerAccount};
 use starknet_rs_contract::ContractFactory;
-use starknet_rs_core::types::Felt;
+use starknet_rs_core::types::{DeclareTransaction, Felt, InvokeTransaction, Transaction};
 
 use crate::common::utils::get_events_contract_in_sierra_and_compiled_class_hash;
 
@@ -170,10 +170,7 @@ async fn mint_dump_on_transaction_and_load() {
             .expect("Could not start Devnet");
     let loaded_transaction_1 =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash_1).await.unwrap();
-    if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(tx),
-    ) = loaded_transaction_1
-    {
+    if let Transaction::Invoke(InvokeTransaction::V1(tx)) = loaded_transaction_1 {
         assert_eq!(tx.transaction_hash, mint_tx_hash_1);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction_1:?}");
@@ -181,10 +178,7 @@ async fn mint_dump_on_transaction_and_load() {
 
     let loaded_transaction_2 =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash_2).await.unwrap();
-    if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(tx),
-    ) = loaded_transaction_2
-    {
+    if let Transaction::Invoke(InvokeTransaction::V1(tx)) = loaded_transaction_2 {
         assert_eq!(tx.transaction_hash, mint_tx_hash_2);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction_2:?}");
@@ -217,11 +211,8 @@ async fn mint_dump_on_exit_and_load() {
     assert_ne!(devnet_dump_pid, devnet_load_pid); // if PID's are different SIGINT signal worked
     let loaded_transaction =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash).await.unwrap();
-    if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(invoke_v1),
-    ) = loaded_transaction
-    {
-        assert_eq!(invoke_v1.transaction_hash, mint_tx_hash);
+    if let Transaction::Invoke(InvokeTransaction::V1(invoke)) = loaded_transaction {
+        assert_eq!(invoke.transaction_hash, mint_tx_hash);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction:?}");
     }
@@ -254,7 +245,8 @@ async fn declare_deploy() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -266,7 +258,8 @@ async fn declare_deploy() {
         ContractFactory::new(declaration_result.class_hash, predeployed_account.clone());
     let deploy_result = contract_factory
         .deploy_v3(vec![], Felt::ZERO, false)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -278,33 +271,27 @@ async fn declare_deploy() {
             .expect("Could not start Devnet");
 
     // check declare transaction
-    let loaded_declare_v2 = devnet_load
+    let loaded_declare = devnet_load
         .json_rpc_client
         .get_transaction_by_hash(declaration_result.transaction_hash)
         .await
         .unwrap();
-    if let starknet_rs_core::types::Transaction::Declare(
-        starknet_rs_core::types::DeclareTransaction::V2(declare_v2),
-    ) = loaded_declare_v2
-    {
-        assert_eq!(declare_v2.transaction_hash, declaration_result.transaction_hash);
+    if let Transaction::Declare(DeclareTransaction::V3(declare)) = loaded_declare {
+        assert_eq!(declare.transaction_hash, declaration_result.transaction_hash);
     } else {
-        panic!("Could not unpack the transaction from {loaded_declare_v2:?}");
+        panic!("Could not unpack the transaction from {loaded_declare:?}");
     }
 
     // check deploy transaction
-    let loaded_deploy_v2 = devnet_load
+    let loaded_deploy = devnet_load
         .json_rpc_client
         .get_transaction_by_hash(deploy_result.transaction_hash)
         .await
         .unwrap();
-    if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(deploy_v2),
-    ) = loaded_deploy_v2
-    {
-        assert_eq!(deploy_v2.transaction_hash, deploy_result.transaction_hash);
+    if let Transaction::Invoke(InvokeTransaction::V3(deploy)) = loaded_deploy {
+        assert_eq!(deploy.transaction_hash, deploy_result.transaction_hash);
     } else {
-        panic!("Could not unpack the transaction from {loaded_deploy_v2:?}");
+        panic!("Could not unpack the transaction from {loaded_deploy:?}");
     }
 }
 
@@ -417,11 +404,8 @@ async fn dump_load_endpoints_transaction_and_state_after_load_is_valid() {
 
     let loaded_transaction =
         devnet_load.json_rpc_client.get_transaction_by_hash(mint_tx_hash).await.unwrap();
-    if let starknet_rs_core::types::Transaction::Invoke(
-        starknet_rs_core::types::InvokeTransaction::V1(invoke_v1),
-    ) = loaded_transaction
-    {
-        assert_eq!(invoke_v1.transaction_hash, mint_tx_hash);
+    if let Transaction::Invoke(InvokeTransaction::V1(invoke)) = loaded_transaction {
+        assert_eq!(invoke.transaction_hash, mint_tx_hash);
     } else {
         panic!("Could not unpack the transaction from {loaded_transaction:?}");
     }

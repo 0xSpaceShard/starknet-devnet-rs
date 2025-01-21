@@ -38,7 +38,7 @@ async fn deploy_account_transaction_receipt() {
     let new_account_address = deployment.address();
     devnet.mint(new_account_address, 1e18 as u128).await;
 
-    let deploy_account_result = deployment.max_fee(Felt::from(1e18 as u128)).send().await.unwrap();
+    let deploy_account_result = deployment.gas(1e18 as u64).gas_price(1).send().await.unwrap();
 
     let deploy_account_receipt = devnet
         .json_rpc_client
@@ -73,7 +73,8 @@ async fn deploy_transaction_receipt() {
     let (cairo_1_contract, casm_class_hash) =
         get_events_contract_in_sierra_and_compiled_class_hash();
 
-    let max_fee = Felt::from(1e18 as u128);
+    let max_gas = 1e18 as u64;
+    let max_gas_price = 1;
 
     // declare the contract
     let declaration_result = predeployed_account
@@ -90,7 +91,8 @@ async fn deploy_transaction_receipt() {
     let constructor_args = Vec::<Felt>::new();
     let deployment_result = contract_factory
         .deploy_v3(constructor_args.clone(), salt, false)
-        .max_fee(max_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .send()
         .await
         .unwrap();
@@ -111,7 +113,7 @@ async fn deploy_transaction_receipt() {
                 &constructor_args,
             );
             assert_eq!(receipt.contract_address, expected_contract_address);
-            assert!(receipt.actual_fee.amount < max_fee);
+            assert!(receipt.actual_fee.amount < Felt::from(max_gas as u128 * max_gas_price));
         }
         _ => panic!("Invalid receipt {:?}", deployment_receipt),
     };
@@ -133,12 +135,14 @@ async fn invalid_deploy_transaction_receipt() {
     let (cairo_1_contract, casm_class_hash) =
         get_events_contract_in_sierra_and_compiled_class_hash();
 
-    let max_fee = Felt::from(1e18 as u128);
+    let max_gas = 1e18 as u64;
+    let max_gas_price = 1;
 
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
-        .max_fee(max_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .send()
         .await
         .unwrap();
@@ -151,7 +155,8 @@ async fn invalid_deploy_transaction_receipt() {
     let invalid_constructor_args = vec![Felt::ONE];
     let invalid_deployment_result = contract_factory
         .deploy_v3(invalid_constructor_args, salt, false)
-        .max_fee(max_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .send()
         .await
         .unwrap();
@@ -170,7 +175,7 @@ async fn invalid_deploy_transaction_receipt() {
                 }
                 other => panic!("Invalid execution result {other:?}"),
             }
-            assert!(receipt.actual_fee.amount < max_fee);
+            assert!(receipt.actual_fee.amount < Felt::from(max_gas as u128 * max_gas_price));
         }
         _ => panic!("Invalid receipt {:?}", invalid_deployment_receipt),
     };
@@ -203,8 +208,11 @@ async fn reverted_invoke_transaction_receipt() {
 
     // send transaction with lower than estimated fee
     // should revert
-    let max_fee = fee.overall_fee - Felt::ONE;
-    let transfer_result = transfer_execution.max_fee(max_fee).send().await.unwrap();
+    let gas_estimation: u64 = fee.gas_consumed.try_into().unwrap();
+    let max_gas = gas_estimation - 1;
+    let max_gas_price = fee.gas_price.try_into().unwrap();
+    let transfer_result =
+        transfer_execution.gas(max_gas).gas_price(max_gas_price).send().await.unwrap();
 
     let transfer_receipt = devnet
         .json_rpc_client
@@ -219,7 +227,7 @@ async fn reverted_invoke_transaction_receipt() {
                 starknet_rs_core::types::ExecutionResult::Reverted { .. } => (),
                 _ => panic!("Invalid receipt {:?}", receipt),
             }
-            assert_eq!(receipt.actual_fee.amount, max_fee);
+            assert_eq!(receipt.actual_fee.amount, Felt::from(max_gas as u128 * max_gas_price));
         }
         _ => panic!("Invalid receipt {:?}", transfer_receipt),
     };

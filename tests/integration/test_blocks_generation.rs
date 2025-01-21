@@ -301,7 +301,8 @@ async fn blocks_on_demand_declarations() {
     for (nonce, (class, casm_hash)) in classes_with_hash.iter().enumerate() {
         let declaration_result = predeployed_account
             .declare_v3(Arc::new(class.clone()), *casm_hash)
-            .max_fee(Felt::from(1e18 as u128))
+            .gas(1e18 as u64)
+            .gas_price(1)
             .nonce(Felt::from(nonce))
             .send()
             .await
@@ -380,7 +381,8 @@ async fn blocks_on_demand_invoke_and_call() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(contract_class), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .nonce(Felt::ZERO)
         .send()
         .await
@@ -395,7 +397,8 @@ async fn blocks_on_demand_invoke_and_call() {
     let ctor_args = vec![initial_value];
     let deploy_result = contract_factory
         .deploy_v3(ctor_args.clone(), Felt::ZERO, false)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .nonce(Felt::ONE)
         .send()
         .await
@@ -421,7 +424,8 @@ async fn blocks_on_demand_invoke_and_call() {
     for i in 1..=increment_count {
         let invoke_result = predeployed_account
             .execute_v3(contract_invoke.clone())
-            .max_fee(Felt::from(1e18 as u128))
+            .gas(1e18 as u64)
+            .gas_price(1)
             .nonce(Felt::from(i + 1_u128))
             .send()
             .await

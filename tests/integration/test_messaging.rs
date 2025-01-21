@@ -42,7 +42,8 @@ use crate::common::utils::{
 const DUMMY_L1_ADDRESS: &str = "0xc662c410c0ecf747543f5ba90660f6abebd9c8c4";
 const MESSAGE_WITHDRAW_OPCODE: &str = "0x0";
 
-const MAX_FEE: u128 = 1e18 as u128;
+const MAX_GAS: u64 = 1e18 as u64;
+const MAX_GAS_PRICE: u128 = 1;
 
 /// Differs from MESSAGING_WHITELISTED_L1_CONTRACT: that address is hardcoded in the cairo0 l1l2
 /// contract relying on it This address is provided as an argument to the cairo1 l1l2
@@ -63,7 +64,7 @@ async fn withdraw<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount, l1_address],
     }];
 
-    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
+    account.execute_v3(invoke_calls).gas(MAX_GAS).gas_price(MAX_GAS_PRICE).send().await.unwrap();
 }
 
 /// Increases the balance for the given user.
@@ -79,7 +80,7 @@ async fn increase_balance<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount],
     }];
 
-    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await.unwrap();
+    account.execute_v3(invoke_calls).gas(MAX_GAS).gas_price(MAX_GAS_PRICE).send().await.unwrap();
 }
 
 /// Gets the balance for the given user.
@@ -109,7 +110,7 @@ async fn withdraw_from_lib<A: ConnectedAccount + Send + Sync + 'static>(
         calldata: vec![user, amount, l1_address, lib_class_hash],
     }];
 
-    account.execute_v3(invoke_calls).max_fee(Felt::from(MAX_FEE)).send().await
+    account.execute_v3(invoke_calls).gas(MAX_GAS).gas_price(MAX_GAS_PRICE).send().await
 }
 
 /// Returns the deployment address
@@ -122,7 +123,7 @@ async fn deploy_l2_msg_contract(
 
     let sierra_class_hash = sierra_class.class_hash();
     let declaration = account.declare_v3(Arc::new(sierra_class), casm_class_hash);
-    declaration.max_fee(Felt::from(MAX_FEE)).send().await?;
+    declaration.gas(MAX_GAS).gas_price(MAX_GAS_PRICE).send().await?;
 
     // deploy instance of class
     let contract_factory = ContractFactory::new(sierra_class_hash, account.clone());
@@ -137,7 +138,8 @@ async fn deploy_l2_msg_contract(
     contract_factory
         .deploy_v3(constructor_calldata, salt, false)
         .nonce(Felt::ONE)
-        .max_fee(Felt::from(MAX_FEE))
+        .gas(MAX_GAS)
+        .gas_price(MAX_GAS_PRICE)
         .send()
         .await
         .unwrap();
@@ -226,7 +228,8 @@ async fn can_send_message_to_l1_from_library_syscall() {
 
     account
         .declare_v3(Arc::new(sierra_class), casm_class_hash)
-        .max_fee(Felt::from(MAX_FEE))
+        .gas(MAX_GAS)
+        .gas_price(MAX_GAS_PRICE)
         .send()
         .await
         .unwrap();

@@ -30,7 +30,8 @@ async fn get_events_correct_chunking(devnet: &BackgroundDevnet, block_on_demand:
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
-        .max_fee(Felt::from(100000000000000000000u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -46,7 +47,8 @@ async fn get_events_correct_chunking(devnet: &BackgroundDevnet, block_on_demand:
         ContractFactory::new(declaration_result.class_hash, predeployed_account.clone());
     contract_factory
         .deploy_v3(vec![], Felt::ZERO, false)
-        .max_fee(Felt::from(100000000000000000000u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -76,7 +78,8 @@ async fn get_events_correct_chunking(devnet: &BackgroundDevnet, block_on_demand:
         predeployed_account
             .execute_v3(events_contract_call.clone())
             .nonce(nonce + Felt::from(n))
-            .max_fee(Felt::from(100000000000000000000u128))
+            .gas(1e18 as u64)
+            .gas_price(1)
             .send()
             .await
             .unwrap();

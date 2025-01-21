@@ -110,8 +110,8 @@ async fn minting_in_multiple_steps_and_getting_balance_at_each_block() {
 // estimate fee of invoke transaction that reverts must fail, but simulating the same invoke
 // transaction have to produce trace of a reverted transaction
 #[tokio::test]
-async fn estimate_fee_and_simulate_transaction_for_contract_deployment_in_an_old_block_should_not_produce_the_same_error(
-) {
+async fn estimate_fee_and_simulate_transaction_for_contract_deployment_in_an_old_block_should_not_produce_the_same_error()
+ {
     let devnet =
         BackgroundDevnet::spawn_with_additional_args(&["--state-archive-capacity", "full"])
             .await
@@ -234,7 +234,8 @@ async fn test_getting_class_at_various_blocks() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();

@@ -40,13 +40,6 @@ fn assert_fee_estimation(fee_estimation: &FeeEstimate) {
     assert!(fee_estimation.overall_fee > Felt::ZERO, "Checking fee_estimation: {fee_estimation:?}");
 }
 
-fn multiply_field_element(field_element: Felt, multiplier: f64) -> Felt {
-    let (_, parts) = field_element.to_bigint().to_u64_digits();
-    assert_eq!(parts.len(), 1);
-
-    ((parts[0] as f64 * multiplier) as u128).into()
-}
-
 #[tokio::test]
 async fn estimate_fee_of_deploy_account() {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start Devnet");
@@ -77,13 +70,16 @@ async fn estimate_fee_of_deploy_account() {
     assert_fee_estimation(&fee_estimation);
 
     // fund the account before deployment
+    let gas_estimation: u64 = fee_estimation.gas_consumed.try_into().unwrap();
+    let gas_price_estimation = fee_estimation.gas_price.try_into().unwrap();
     let mint_amount = fee_estimation.overall_fee * Felt::TWO;
     devnet.mint(deployment_address, mint_amount.to_biguint().try_into().unwrap()).await;
 
     // try sending with insufficient max fee
     let unsuccessful_deployment_tx = account_factory
         .deploy_v3(salt)
-        .max_fee(fee_estimation.overall_fee - Felt::ONE)
+        .gas(gas_estimation - 1)
+        .gas_price(gas_price_estimation)
         .nonce(new_account_nonce)
         .send()
         .await;
@@ -97,7 +93,8 @@ async fn estimate_fee_of_deploy_account() {
     // try sending with sufficient max fee
     let successful_deployment = account_factory
         .deploy_v3(salt)
-        .max_fee(multiply_field_element(fee_estimation.overall_fee, 1.1))
+        .gas(gas_estimation + gas_estimation / 10)
+        .gas_price(gas_price_estimation)
         .nonce(new_account_nonce)
         .send()
         .await
@@ -264,6 +261,8 @@ async fn estimate_fee_of_invoke() {
         .await
         .unwrap();
     assert_fee_estimation(&fee_estimation);
+    let gas_estimation = fee_estimation.gas_consumed.try_into().unwrap();
+    let gas_price_estimation = fee_estimation.gas_price.try_into().unwrap();
 
     // prepare the call used in checking the balance
     let call = FunctionCall {
@@ -273,10 +272,10 @@ async fn estimate_fee_of_invoke() {
     };
 
     // invoke with insufficient max_fee
-    let insufficient_max_fee = fee_estimation.overall_fee - Felt::ONE;
     let unsuccessful_invoke_tx = account
         .execute_v3(invoke_calls.clone())
-        .max_fee(insufficient_max_fee)
+        .gas(gas_estimation)
+        .gas_price(gas_price_estimation)
         .send()
         .await
         .unwrap();
@@ -292,9 +291,13 @@ async fn estimate_fee_of_invoke() {
     .await;
 
     // invoke with sufficient max_fee
-    let sufficient_max_fee = multiply_field_element(fee_estimation.overall_fee, 1.1);
-
-    account.execute_v3(invoke_calls).max_fee(sufficient_max_fee).send().await.unwrap();
+    account
+        .execute_v3(invoke_calls)
+        .gas(gas_estimation + gas_estimation / 10)
+        .gas_price(gas_price_estimation)
+        .send()
+        .await
+        .unwrap();
     let balance_after_sufficient =
         devnet.json_rpc_client.call(call, BlockId::Tag(BlockTag::Latest)).await.unwrap();
     assert_eq!(balance_after_sufficient, vec![increase_amount]);
@@ -347,10 +350,11 @@ async fn message_available_if_estimation_reverts() {
         calldata: vec![cairo_short_string_to_felt(panic_reason).unwrap()],
     }];
 
+    // TODO gas_price?
     let invoke_err = account
         .execute_v3(calls.clone())
         .nonce(account.get_nonce().await.unwrap())
-        .max_fee(Felt::ZERO)
+        .gas(0)
         .estimate_fee()
         .await
         .unwrap_err();
@@ -469,8 +473,8 @@ async fn estimate_fee_of_multiple_txs() {
 
     let calldata = account.encode_calls(&calls);
 
-    let prepared_invoke =
-        account.execute_v3(calls).nonce(Felt::ONE).max_fee(Felt::ZERO).prepared().unwrap();
+    // TODO gas_price?
+    let prepared_invoke = account.execute_v3(calls).nonce(Felt::ONE).gas(0).prepared().unwrap();
 
     let deployment_signature =
         signer.sign_hash(&prepared_invoke.transaction_hash(query_only)).await.unwrap();
@@ -513,8 +517,8 @@ async fn estimate_fee_of_multiple_txs() {
 }
 
 #[tokio::test]
-async fn estimate_fee_of_declare_and_deploy_via_udc_returns_index_of_second_transaction_when_executed_with_non_existing_method(
-) {
+async fn estimate_fee_of_declare_and_deploy_via_udc_returns_index_of_second_transaction_when_executed_with_non_existing_method()
+ {
     let devnet = BackgroundDevnet::spawn().await.expect("Could not start devnet");
 
     // get account

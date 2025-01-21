@@ -3,7 +3,6 @@ use std::sync::Arc;
 use starknet_rs_accounts::{
     Account, AccountFactory, ExecutionEncoding, OpenZeppelinAccountFactory, SingleOwnerAccount,
 };
-use starknet_rs_core::types::contract::legacy::LegacyContractClass;
 use starknet_rs_core::types::{BlockId, BlockTag, Call, Felt, StarknetError};
 use starknet_rs_core::utils::get_selector_from_name;
 use starknet_rs_providers::{Provider, ProviderError};

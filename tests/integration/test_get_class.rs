@@ -92,7 +92,8 @@ async fn test_getting_class_of_declared_cairo1_contract() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -144,7 +145,8 @@ async fn test_getting_class_with_blocks_on_demand() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -215,7 +217,8 @@ async fn test_getting_class_after_block_abortion() {
     // declare the contract
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
-        .max_fee(Felt::from(1e18 as u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();

@@ -63,11 +63,13 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: &str) {
         get_flattened_sierra_contract_and_casm_hash(CAIRO_1_CONTRACT_PATH);
 
     let max_fee = Felt::ZERO;
+    let max_gas = 0;
+    // TODO max_gas_price?
     let nonce = Felt::ZERO;
 
     let declaration = account
         .declare_v3(Arc::new(flattened_contract_artifact.clone()), casm_hash)
-        .max_fee(max_fee)
+        .gas(max_gas)
         .nonce(nonce)
         .prepared()
         .unwrap();
@@ -280,11 +282,13 @@ async fn unsuccessful_declare_set_gas_successful_declare() {
     ));
     let (contract_class, casm_class_hash) = get_simple_contract_in_sierra_and_compiled_class_hash();
 
-    let max_gas_fee = Felt::from(1e14 as u128);
+    let max_gas = 1e14 as u64;
+    let max_gas_price = 1;
 
     let unsuccessful_declare_tx = predeployed_account
         .declare_v3(Arc::new(contract_class.clone()), casm_class_hash)
-        .max_fee(max_gas_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .send()
         .await;
 
@@ -317,7 +321,8 @@ async fn unsuccessful_declare_set_gas_successful_declare() {
 
     let successful_declare_tx = predeployed_account
         .declare_v3(Arc::new(contract_class), casm_class_hash)
-        .max_fee(max_gas_fee)
+        .gas(max_gas)
+        .gas_price(max_gas_price)
         .send()
         .await
         .unwrap();

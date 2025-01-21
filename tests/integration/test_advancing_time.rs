@@ -65,7 +65,8 @@ pub async fn setup_timestamp_contract(devnet: &BackgroundDevnet) -> Felt {
         get_block_reader_contract_in_sierra_and_compiled_class_hash();
     let declaration_result = predeployed_account
         .declare_v3(Arc::new(cairo_1_contract), casm_class_hash)
-        .max_fee(Felt::from(100000000000000000000u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
@@ -76,7 +77,8 @@ pub async fn setup_timestamp_contract(devnet: &BackgroundDevnet) -> Felt {
         ContractFactory::new(declaration_result.class_hash, predeployed_account.clone());
     contract_factory
         .deploy_v3(vec![], Felt::ZERO, false)
-        .max_fee(Felt::from(100000000000000000000u128))
+        .gas(1e18 as u64)
+        .gas_price(1)
         .send()
         .await
         .unwrap();
