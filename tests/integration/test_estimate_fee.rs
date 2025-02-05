@@ -502,12 +502,12 @@ async fn estimate_fee_of_multiple_txs() {
 
     let calls = vec![Call {
         to: UDC_CONTRACT_ADDRESS,
-        selector: get_selector_from_name("deployContract").unwrap(),
+        selector: get_selector_from_name("deploy_contract").unwrap(),
         calldata: vec![
             class_hash,
+            Felt::ZERO,                        // from zero (opposite of unique)
             Felt::from_hex_unchecked("0x123"), // salt
-            Felt::ZERO,
-            Felt::ZERO,
+            Felt::ZERO,                        // calldata length
         ],
     }];
 
@@ -588,9 +588,9 @@ async fn estimate_fee_of_declare_and_deploy_via_udc_returns_index_of_second_tran
         selector: get_selector_from_name("no_such_method").unwrap(),
         calldata: vec![
             class_hash,
+            Felt::ZERO,                        // from zero (opposite of unique)
             Felt::from_hex_unchecked("0x123"), // salt
-            Felt::ZERO,
-            Felt::ZERO,
+            Felt::ZERO,                        // calldata length
         ],
     }];
 
@@ -687,9 +687,9 @@ async fn estimate_fee_of_multiple_failing_txs_should_return_index_of_the_first_f
         selector: get_selector_from_name("no_such_method").unwrap(),
         calldata: vec![
             class_hash,
+            Felt::ZERO,                        // from zero (opposite of unique)
             Felt::from_hex_unchecked("0x123"), // salt
-            Felt::ZERO,
-            Felt::ZERO,
+            Felt::ZERO,                        // calldata length
         ],
     }];
 
