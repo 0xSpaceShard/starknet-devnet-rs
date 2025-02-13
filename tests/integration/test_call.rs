@@ -1,3 +1,4 @@
+use server::test_utils::assert_contains;
 use starknet_rs_core::types::{BlockId, BlockTag, Felt, FunctionCall, StarknetError};
 use starknet_rs_providers::{Provider, ProviderError};
 
@@ -53,10 +54,7 @@ async fn calling_nonexistent_cairo0_contract_method() {
         .await
         .expect_err("Should have failed");
 
-    match err {
-        ProviderError::StarknetError(StarknetError::ContractError(_)) => (),
-        _ => panic!("Invalid error: {err:?}"),
-    }
+    assert_contains(&err.to_string(), "Requested entrypoint does not exist in the contract");
 }
 
 #[tokio::test]
@@ -79,8 +77,5 @@ async fn calling_nonexistent_cairo1_contract_method() {
         .await
         .expect_err("Should have failed");
 
-    match err {
-        ProviderError::StarknetError(StarknetError::ContractError(_)) => (),
-        _ => panic!("Invalid error: {err:?}"),
-    }
+    assert_contains(&err.to_string(), "Requested entrypoint does not exist in the contract");
 }

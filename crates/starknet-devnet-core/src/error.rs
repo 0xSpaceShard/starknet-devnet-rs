@@ -21,6 +21,7 @@ pub enum Error {
     #[error(transparent)]
     BlockifierExecutionError(#[from] blockifier::execution::errors::EntryPointExecutionError),
     #[error("{execution_error}")]
+    // TODO change type of execution_error
     ExecutionError { execution_error: String, index: usize },
     #[error("Types error: {0}")]
     TypesError(#[from] starknet_types::error::Error),
@@ -72,6 +73,8 @@ pub enum Error {
     CompiledClassHashMismatch,
     #[error("{msg}")]
     ClassAlreadyDeclared { msg: String },
+    #[error("Requested entrypoint does not exist in the contract")]
+    EntrypointNotFound,
 }
 
 impl From<starknet_types_core::felt::FromStrError> for Error {
@@ -123,6 +126,10 @@ impl From<TransactionExecutionError> for Error {
             err @ TransactionExecutionError::DeclareTransactionError { .. } => {
                 Error::ClassAlreadyDeclared { msg: err.to_string() }
             }
+            TransactionExecutionError::PanicInValidate { panic_reason } => {
+                TransactionValidationError::ValidationFailure { reason: panic_reason.to_string() }
+                    .into()
+            }
             other => Self::BlockifierTransactionError(other),
         }
     }
@@ -131,7 +138,7 @@ impl From<TransactionExecutionError> for Error {
 impl From<FeeCheckError> for Error {
     fn from(value: FeeCheckError) -> Self {
         match value {
-            FeeCheckError::MaxL1GasAmountExceeded { .. } | FeeCheckError::MaxFeeExceeded { .. } => {
+            FeeCheckError::MaxGasAmountExceeded { .. } | FeeCheckError::MaxFeeExceeded { .. } => {
                 TransactionValidationError::InsufficientMaxFee.into()
             }
             FeeCheckError::InsufficientFeeTokenBalance { .. } => {
@@ -146,12 +153,12 @@ impl From<TransactionFeeError> for Error {
         match value {
             TransactionFeeError::FeeTransferError { .. }
             | TransactionFeeError::MaxFeeTooLow { .. }
-            | TransactionFeeError::MaxL1GasPriceTooLow { .. }
-            | TransactionFeeError::MaxL1GasAmountTooLow { .. } => {
+            | TransactionFeeError::MaxGasPriceTooLow { .. }
+            | TransactionFeeError::MaxGasAmountTooLow { .. } => {
                 TransactionValidationError::InsufficientMaxFee.into()
             }
             TransactionFeeError::MaxFeeExceedsBalance { .. }
-            | TransactionFeeError::L1GasBoundsExceedBalance { .. } => {
+            | TransactionFeeError::GasBoundsExceedBalance { .. } => {
                 TransactionValidationError::InsufficientAccountBalance.into()
             }
             err => Error::TransactionFeeError(err),

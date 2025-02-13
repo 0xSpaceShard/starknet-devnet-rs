@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use blockifier::transaction::transactions::L1HandlerTransaction as BlockifierL1HandlerTransaction;
 use serde::Serialize;
 use starknet_api::core::{
     ContractAddress as ApiContractAddress, EntryPointSelector as ApiEntryPointSelector,
     Nonce as ApiNonce,
 };
+use starknet_api::executable_transaction::L1HandlerTransaction as ApiL1HandlerTransaction;
+use starknet_api::transaction::fields::{Calldata as ApiCalldata, Fee as ApiFee};
 use starknet_api::transaction::{
-    Calldata as ApiCalldata, Fee as ApiFee, L1HandlerTransaction as ApiL1HandlerTransaction,
     TransactionHash as ApiTransactionHash, TransactionVersion as ApiTransactionVersion,
 };
 use starknet_rs_core::crypto::compute_hash_on_elements;
@@ -58,12 +58,12 @@ impl L1HandlerTransaction {
     }
 
     /// Creates a blockifier version of `L1HandlerTransaction`.
-    pub fn create_blockifier_transaction(
+    pub fn create_sn_api_transaction(
         &self,
         chain_id: Felt,
-    ) -> DevnetResult<BlockifierL1HandlerTransaction> {
-        let transaction = BlockifierL1HandlerTransaction {
-            tx: ApiL1HandlerTransaction {
+    ) -> DevnetResult<ApiL1HandlerTransaction> {
+        let transaction = ApiL1HandlerTransaction {
+            tx: starknet_api::transaction::L1HandlerTransaction {
                 contract_address: ApiContractAddress::try_from(self.contract_address)?,
                 entry_point_selector: ApiEntryPointSelector(self.entry_point_selector),
                 calldata: ApiCalldata(Arc::new(self.calldata.clone())),

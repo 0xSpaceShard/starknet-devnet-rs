@@ -1,3 +1,4 @@
+use blockifier::transaction::account_transaction::ExecutionFlags;
 use blockifier::transaction::transactions::ExecutableTransaction;
 use starknet_types::contract_class::ContractClass;
 use starknet_types::felt::{ClassHash, CompiledClassHash, TransactionHash};
@@ -27,11 +28,11 @@ pub fn add_declare_transaction(
         });
     }
 
-    let blockifier_declare_transaction = broadcasted_declare_transaction
-        .create_blockifier_declare(&starknet.chain_id().to_felt(), false)?;
+    let executable_tx =
+        broadcasted_declare_transaction.create_sn_api_declare(&starknet.chain_id().to_felt())?;
 
-    let transaction_hash = blockifier_declare_transaction.tx_hash().0;
-    let class_hash = blockifier_declare_transaction.class_hash().0;
+    let transaction_hash = executable_tx.tx_hash.0;
+    let class_hash = executable_tx.class_hash().0;
 
     let (declare_transaction, contract_class, casm_hash, sender_address) =
         match broadcasted_declare_transaction {
@@ -77,24 +78,19 @@ pub fn add_declare_transaction(
     )?);
 
     let transaction = TransactionWithHash::new(transaction_hash, declare_transaction);
-    let blockifier_execution_info =
-        blockifier::transaction::account_transaction::AccountTransaction::Declare(
-            blockifier_declare_transaction,
-        )
-        .execute(
-            &mut starknet.pending_state.state,
-            &starknet.block_context,
-            true,
-            validate,
-        )?;
+    let execution_info = blockifier::transaction::account_transaction::AccountTransaction {
+        tx: starknet_api::executable_transaction::AccountTransaction::Declare(executable_tx),
+        execution_flags: ExecutionFlags { only_query: false, charge_fee: true, validate },
+    }
+    .execute(&mut starknet.pending_state.state, &starknet.block_context)?;
 
     // if tx successful, store the class
-    if !blockifier_execution_info.is_reverted() {
+    if !execution_info.is_reverted() {
         let state = starknet.get_state();
         state.declare_contract_class(class_hash, casm_hash, contract_class)?;
     }
 
-    starknet.handle_accepted_transaction(transaction, blockifier_execution_info)?;
+    starknet.handle_accepted_transaction(transaction, execution_info)?;
 
     Ok((transaction_hash, class_hash))
 }
@@ -134,7 +130,7 @@ fn assert_casm_hash_is_valid(
 mod tests {
     use blockifier::state::state_api::StateReader;
     use starknet_api::core::CompiledClassHash;
-    use starknet_api::transaction::Fee;
+    use starknet_api::transaction::fields::Fee;
     use starknet_rs_core::types::{
         BlockId, BlockTag, Felt, TransactionExecutionStatus, TransactionFinalityStatus,
     };
@@ -167,7 +163,7 @@ mod tests {
             Fee(10000),
             &Vec::new(),
             Felt::ZERO,
-            &contract_class.into(),
+            &contract_class,
             Felt::ONE,
         )))
     }
@@ -371,7 +367,7 @@ mod tests {
             Fee(0),
             &vec![],
             dummy_felt(),
-            &dummy_cairo_0_contract_class().into(),
+            &dummy_cairo_0_contract_class(),
             Felt::ONE,
         );
 
