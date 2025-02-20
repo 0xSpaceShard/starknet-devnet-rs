@@ -48,6 +48,7 @@ impl SetGasPrice for BackgroundDevnet {
 /// 1. Execute simulateTransactions with a declare transaction and check gas fees.
 /// 2. Set the gas values.
 /// 3. Execute simulateTransactions again and check gas fees.
+///
 /// Chain ID assertion justified in: https://github.com/0xSpaceShard/starknet-devnet-rs/pull/551#discussion_r1682755696
 async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: Felt) {
     // get account
@@ -111,7 +112,7 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: Felt) {
         resp_no_flags["fee_estimation"]["data_gas_price"],
         to_hex_felt(&DEVNET_DEFAULT_GAS_PRICE)
     );
-    assert_eq!(resp_no_flags["fee_estimation"]["overall_fee"], "0xa7275ca6d3000");
+    assert_eq!(resp_no_flags["fee_estimation"]["overall_fee"], "0x73b00ed0c000");
 
     let params_skip_validation_and_fee_charge = get_params(&["SKIP_VALIDATE", "SKIP_FEE_CHARGE"]);
     let resp_skip_validation = &devnet
@@ -129,7 +130,7 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: Felt) {
         resp_skip_validation["fee_estimation"]["data_gas_price"],
         to_hex_felt(&DEVNET_DEFAULT_GAS_PRICE)
     );
-    assert_eq!(resp_skip_validation["fee_estimation"]["overall_fee"], "0xa7247397f6000");
+    assert_eq!(resp_skip_validation["fee_estimation"]["overall_fee"], "0x736a356c0800");
 
     assert_difference_if_validation(
         resp_no_flags,
@@ -160,7 +161,7 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: Felt) {
 
     assert_eq!(resp_no_flags["fee_estimation"]["gas_price"], to_hex_felt(&wei_price));
     assert_eq!(resp_no_flags["fee_estimation"]["data_gas_price"], to_hex_felt(&wei_price_data));
-    assert_eq!(resp_no_flags["fee_estimation"]["overall_fee"], "0x38008384ec45ab780000");
+    assert_eq!(resp_no_flags["fee_estimation"]["overall_fee"], "0x26230612b27f4e00000");
 
     let resp_skip_validation = &devnet
         .send_custom_rpc("starknet_simulateTransactions", params_skip_validation_and_fee_charge)
@@ -171,7 +172,7 @@ async fn set_gas_scenario(devnet: BackgroundDevnet, expected_chain_id: Felt) {
         resp_skip_validation["fee_estimation"]["data_gas_price"],
         to_hex_felt(&wei_price_data)
     );
-    assert_eq!(resp_skip_validation["fee_estimation"]["overall_fee"], "0x37ff89b813a3e6700000");
+    assert_eq!(resp_skip_validation["fee_estimation"]["overall_fee"], "0x260b9ade6354d540000");
 
     assert_difference_if_validation(
         resp_no_flags,
@@ -214,6 +215,7 @@ async fn set_gas_check_blocks() {
     assert_eq!(latest_block.block_number, 0);
     assert_eq!(latest_block.l1_gas_price, default_gas_price);
     assert_eq!(latest_block.l1_data_gas_price, default_gas_price);
+    // TODO gas - add l2 gas
 
     let first_update_gas_price =
         ResourcePrice { price_in_wei: (9e18 as u128).into(), price_in_fri: (7e18 as u128).into() };

@@ -1,6 +1,6 @@
 use serde::Serialize;
 use starknet_api::data_availability::DataAvailabilityMode;
-use starknet_api::transaction::Tip;
+use starknet_api::transaction::fields::Tip;
 use starknet_types_core::felt::Felt;
 
 use super::broadcasted_declare_transaction_v3::BroadcastedDeclareTransactionV3;
@@ -23,7 +23,7 @@ pub struct DeclareTransactionV3 {
     paymaster_data: Vec<Felt>,
     nonce_data_availability_mode: DataAvailabilityMode,
     fee_data_availability_mode: DataAvailabilityMode,
-    sender_address: ContractAddress,
+    pub(crate) sender_address: ContractAddress,
     compiled_class_hash: CompiledClassHash,
     class_hash: ClassHash,
     account_deployment_data: Vec<Felt>,
