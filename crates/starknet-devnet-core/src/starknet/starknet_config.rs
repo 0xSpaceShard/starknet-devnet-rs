@@ -127,6 +127,15 @@ pub struct StarknetConfig {
     pub predeclare_argent: bool,
 }
 
+impl StarknetConfig {
+    pub fn uses_pending_block(&self) -> bool {
+        match self.block_generation_on {
+            BlockGenerationOn::Transaction => false,
+            BlockGenerationOn::Demand | BlockGenerationOn::Interval(_) => true,
+        }
+    }
+}
+
 #[allow(clippy::unwrap_used)]
 impl Default for StarknetConfig {
     fn default() -> Self {
