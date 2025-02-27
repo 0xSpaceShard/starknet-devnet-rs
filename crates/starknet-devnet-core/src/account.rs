@@ -1,14 +1,13 @@
 use std::sync::Arc;
-use std::u128;
 
-use blockifier::abi::sierra_types::next_storage_key;
 use blockifier::state::state_api::StateReader;
-use starknet_api::core::{calculate_contract_address, PatriciaKey};
-use starknet_api::transaction::{Calldata, ContractAddressSalt};
+use starknet_api::core::calculate_contract_address;
+use starknet_api::transaction::fields::{Calldata, ContractAddressSalt};
 use starknet_api::{felt, patricia_key};
 use starknet_rs_core::types::Felt;
 use starknet_types::contract_address::ContractAddress;
-use starknet_types::contract_class::{Cairo0Json, ContractClass};
+use starknet_types::contract_class::deprecated::json_contract_class::Cairo0Json;
+use starknet_types::contract_class::ContractClass;
 use starknet_types::error::Error;
 use starknet_types::felt::{felt_from_prefixed_hex, join_felts, split_biguint, ClassHash, Key};
 use starknet_types::num_bigint::BigUint;
@@ -153,14 +152,16 @@ impl Deployed for Account {
 
 impl Accounted for Account {
     fn set_initial_balance(&self, state: &mut DictState) -> DevnetResult<()> {
-        let storage_var_address_low =
-            get_storage_var_address("ERC20_balances", &[Felt::from(self.account_address)])?;
-        let storage_var_address_high = next_storage_key(&storage_var_address_low.try_into()?)?;
+        let storage_var_address_low: starknet_api::state::StorageKey =
+            get_storage_var_address("ERC20_balances", &[Felt::from(self.account_address)])?
+                .try_into()?;
 
-        let total_supply_storage_address_low =
+        let storage_var_address_high = storage_var_address_low.next_storage_key()?;
+
+        let total_supply_storage_address_low: starknet_api::state::StorageKey =
             get_storage_var_address("ERC20_total_supply", &[])?.try_into()?;
         let total_supply_storage_address_high =
-            next_storage_key(&total_supply_storage_address_low)?;
+            total_supply_storage_address_low.next_storage_key()?;
 
         let (high, low) = split_biguint(self.initial_balance.clone());
 
@@ -178,8 +179,7 @@ impl Accounted for Account {
             let (new_total_supply_high, new_total_supply_low) = split_biguint(new_total_supply);
 
             // set balance in ERC20_balances
-            state.set_storage_at(token_address, storage_var_address_low.try_into()?, low)?;
-
+            state.set_storage_at(token_address, storage_var_address_low, low)?;
             state.set_storage_at(token_address, storage_var_address_high, high)?;
 
             // set total supply in ERC20_total_supply
